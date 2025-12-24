@@ -1,0 +1,52 @@
+# FastAPI核心
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+gunicorn==21.2.0
+python-multipart==0.0.6
+
+# 数据库
+pymysql==1.1.0
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# 数据验证
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# CORS和中间件
+python-dotenv==1.0.0
+
+# 日期处理
+python-dateutil==2.8.2
+
+# Excel导出
+openpyxl==3.1.2
+xlsxwriter==3.1.9
+
+# HTTP客户端（如果需要调用Facebook API）
+httpx==0.25.2
+aiohttp==3.9.1
+requests==2.31.0
+
+# 工具
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Google Ads API
+google-ads==27.0.0
+PyYAML==6.0.1
+
+# Facebook Ads API
+facebook-business==21.0.0
+pandas==2.1.4
+
+# 重试机制
+tenacity==8.2.3
+
+# AI / LLM
+google-genai
+
+# Redis缓存
+redis==5.0.1
+hiredis==2.3.2
+cachetools==5.3.2

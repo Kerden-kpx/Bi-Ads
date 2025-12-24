@@ -1,0 +1,74 @@
+[
+  {
+    "month": 1,
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-31",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 2,
+    "start_date": "2025-02-01",
+    "end_date": "2025-02-28",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 3,
+    "start_date": "2025-03-01",
+    "end_date": "2025-03-31",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 4,
+    "start_date": "2025-04-01",
+    "end_date": "2025-04-30",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 5,
+    "start_date": "2025-05-01",
+    "end_date": "2025-05-31",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 6,
+    "start_date": "2025-06-01",
+    "end_date": "2025-06-30",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 7,
+    "start_date": "2025-07-01",
+    "end_date": "2025-07-31",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 8,
+    "start_date": "2025-08-01",
+    "end_date": "2025-08-31",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 9,
+    "start_date": "2025-09-01",
+    "end_date": "2025-09-30",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 10,
+    "start_date": "2025-10-01",
+    "end_date": "2025-10-31",
+    "conversion_value": 0.0
+  },
+  {
+    "month": 11,
+    "start_date": "2025-11-01",
+    "end_date": "2025-11-30",
+    "conversion_value": 140000.0
+  },
+  {
+    "month": 12,
+    "start_date": "2025-12-01",
+    "end_date": "2025-12-31",
+    "conversion_value": 135000.0
+  }
+]

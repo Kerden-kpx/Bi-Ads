@@ -1,0 +1,12 @@
+# 忽略所有 JSON 密钥文件
+*.json
+
+# 但保留示例文件（如果有）
+!*.example.json
+
+# 忽略包含敏感信息的 YAML 配置
+google-ads.yaml
+
+# 保留配置模板
+!google-ads.yaml.example
+
