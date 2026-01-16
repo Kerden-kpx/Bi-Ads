@@ -87,7 +87,7 @@ class GoogleAdsDataSyncService(BaseSyncService):
         """设置代理环境变量"""
         # 从配置读取代理地址
         if proxy_url is None:
-            proxy_url = settings.GOOGLE_ADS_PROXY_URL
+            proxy_url = settings.GOOGLE_ADS_PROXY_URL_EFFECTIVE
         
         if proxy_url:
             os.environ['HTTP_PROXY'] = proxy_url

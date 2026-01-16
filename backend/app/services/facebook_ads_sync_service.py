@@ -280,7 +280,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
     def setup_proxy(self, proxy_url: str = None):
         """为 Facebook API/HTTP 请求设置代理（可选）"""
         if proxy_url is None:
-            proxy_url = settings.FACEBOOK_PROXY_URL
+            proxy_url = settings.FACEBOOK_PROXY_URL_EFFECTIVE
 
         if proxy_url:
             os.environ['HTTP_PROXY'] = proxy_url

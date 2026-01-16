@@ -216,13 +216,8 @@ GOOGLE_ADS_DEVELOPER_TOKEN=your_developer_token
 GOOGLE_ADS_CUSTOMER_ID=your_customer_id
 GOOGLE_ADS_CONFIG_PATH=config/google-ads.yaml
 GOOGLE_ADS_JSON_KEY_FILE_PATH=config/your-service-account-key.json
-GOOGLE_ADS_PROXY_URL=http://127.0.0.1:10808
-GOOGLE_ADS_SYNC_YEAR=2025
+PROXY_URL=http://127.0.0.1:10808
 
-# OAuth2 配置（可选，用于替代 Service Account）
-GOOGLE_ADS_CLIENT_ID=your_client_id
-GOOGLE_ADS_CLIENT_SECRET=your_client_secret
-GOOGLE_ADS_REFRESH_TOKEN=your_refresh_token
 
 # ========== Google Gemini AI 配置 ==========
 GEMINI_API_KEY=your_gemini_api_key
@@ -591,4 +586,3 @@ server {
 ---
 
 **Built with ❤️ using FastAPI**
-

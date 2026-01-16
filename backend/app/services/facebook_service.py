@@ -29,7 +29,7 @@ class FacebookDashboardService(BaseDashboardService):
     def setup_proxy(self, proxy_url: str = None):
         """为 Facebook API 设置代理（可选）"""
         if proxy_url is None:
-            proxy_url = settings.FACEBOOK_PROXY_URL
+            proxy_url = settings.FACEBOOK_PROXY_URL_EFFECTIVE
 
         if proxy_url:
             os.environ['HTTP_PROXY'] = proxy_url

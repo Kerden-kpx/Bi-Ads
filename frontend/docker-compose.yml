@@ -11,7 +11,7 @@ services:
         VITE_THIRD_PARTY_TIMEOUT: ${VITE_THIRD_PARTY_TIMEOUT:-90000}
         VITE_GOOGLE_CUSTOMER_ID: ${VITE_GOOGLE_CUSTOMER_ID:-}
         VITE_GOOGLE_PROXY_URL: ${VITE_GOOGLE_PROXY_URL:-}
-    container_name: ads-bi-frontend
+    container_name: bi-ads-frontend
     ports:
       - "5173:5173"
     extra_hosts:

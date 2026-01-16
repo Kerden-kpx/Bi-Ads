@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     FACEBOOK_AD_ACCOUNT_ID: str = ""  # 账户ID（不含act_前缀）
     FACEBOOK_API_MAX_WORKERS: int = 8  # Facebook API线程池最大并发数
     FACEBOOK_PROXY_URL: str = ""  # Facebook API 代理地址（留空则直连）
+    FACEBOOK_ADS_PROXY_URL: str = ""  # 兼容旧配置
+    FACEBOOK_DAILY_SYNC_ENABLED: bool = False  # 启用每日自动同步
+    FACEBOOK_DAILY_SYNC_DAYS: int = 30  # 同步最近多少天的数据
+    FACEBOOK_DAILY_SYNC_INCLUDE_TODAY: bool = False  # 是否包含今天作为结束日期
+    FACEBOOK_DAILY_SYNC_PROFILE: str = "default"  # 同步性能配置: default|conservative|aggressive
+    FACEBOOK_DAILY_SYNC_ACCOUNT_IDS: str = ""  # 逗号分隔的账号列表，留空则使用 FACEBOOK_AD_ACCOUNT_ID
     
     # Google Ads API配置（请在 .env 文件中配置）
     GOOGLE_ADS_DEVELOPER_TOKEN: str = ""  # Google Ads开发者令牌
@@ -54,14 +60,23 @@ class Settings(BaseSettings):
     GOOGLE_ADS_CONFIG_PATH: str = "config/google-ads.yaml"  # 配置文件路径（相对于项目根目录）
     GOOGLE_ADS_JSON_KEY_FILE_PATH: str = "config/seismic-relic-466902-q4-c98779167f0b.json"  # 服务账号JSON密钥文件路径
     GOOGLE_ADS_PROXY_URL: str = "http://127.0.0.1:10808"  # 代理地址
-    GOOGLE_ADS_SYNC_YEAR: str = "2025"  # 同步年份
+    PROXY_URL: str = ""  # 通用代理地址（可用于Facebook/Google）
     GOOGLE_ADS_MAX_WORKERS: int = 8  # Google Ads API 并发线程池最大线程数
     GOOGLE_ADS_SUMMARY_MAX_WORKERS: int = 4  # 概览汇总线程池最大线程数
+    GOOGLE_ADS_DAILY_SYNC_ENABLED: bool = False  # 启用每日自动同步
+    GOOGLE_ADS_DAILY_SYNC_DAYS: int = 30  # 同步最近多少天的数据
+    GOOGLE_ADS_DAILY_SYNC_INCLUDE_TODAY: bool = False  # 是否包含今天作为结束日期
+
+    @property
+    def FACEBOOK_PROXY_URL_EFFECTIVE(self) -> str:
+        """Facebook 代理地址（优先专用配置，其次旧配置，再使用通用代理）"""
+        return self.FACEBOOK_PROXY_URL or self.FACEBOOK_ADS_PROXY_URL or self.PROXY_URL
+
+    @property
+    def GOOGLE_ADS_PROXY_URL_EFFECTIVE(self) -> str:
+        """Google Ads 代理地址（优先专用配置，再使用通用代理）"""
+        return self.GOOGLE_ADS_PROXY_URL or self.PROXY_URL
     
-    # OAuth2配置（可选，用于替代Service Account）
-    GOOGLE_ADS_CLIENT_ID: str = ""
-    GOOGLE_ADS_CLIENT_SECRET: str = ""
-    GOOGLE_ADS_REFRESH_TOKEN: str = ""
     
     # Gemini AI配置（请在 .env 文件中配置）
     GEMINI_API_KEY: str = ""  # Google Gemini API密钥

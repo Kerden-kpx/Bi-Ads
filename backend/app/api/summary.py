@@ -215,7 +215,7 @@ async def get_google_two_weeks_summary(
     try:
         # 使用配置中的默认值
         final_customer_id = customer_id or settings.GOOGLE_ADS_CUSTOMER_ID
-        final_proxy_url = proxy_url or settings.GOOGLE_ADS_PROXY_URL
+        final_proxy_url = proxy_url or settings.GOOGLE_ADS_PROXY_URL_EFFECTIVE
         
         if not final_customer_id:
             return api_error("缺少Google Ads客户ID", code=400)
@@ -263,7 +263,7 @@ async def get_all_summary_data(
         )
         
         final_customer_id = customer_id or settings.GOOGLE_ADS_CUSTOMER_ID
-        final_proxy_url = proxy_url or settings.GOOGLE_ADS_PROXY_URL
+        final_proxy_url = proxy_url or settings.GOOGLE_ADS_PROXY_URL_EFFECTIVE
         
         google_task = _get_google_two_weeks_summary(
             this_week_start=this_week_start,
@@ -289,4 +289,3 @@ async def get_all_summary_data(
         return api_success(response, "成功获取所有汇总数据")
     except Exception as e:
         return api_error(f"获取汇总数据失败: {str(e)}", code=500)
-

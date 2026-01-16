@@ -113,7 +113,7 @@ async def get_overview_summary(
     try:
         # 使用配置中的默认值
         final_customer_id = customer_id or settings.GOOGLE_ADS_CUSTOMER_ID
-        final_proxy_url = proxy_url or settings.GOOGLE_ADS_PROXY_URL
+        final_proxy_url = proxy_url or settings.GOOGLE_ADS_PROXY_URL_EFFECTIVE
         
         if not final_customer_id:
             return api_error("缺少Google Ads客户ID，请在环境变量中配置GOOGLE_ADS_CUSTOMER_ID或在请求中提供", code=400)
@@ -167,7 +167,7 @@ async def sync_google_ads_data(
     try:
         # 使用配置中的默认值
         final_customer_id = customer_id or settings.GOOGLE_ADS_CUSTOMER_ID
-        final_proxy_url = proxy_url or settings.GOOGLE_ADS_PROXY_URL
+        final_proxy_url = proxy_url or settings.GOOGLE_ADS_PROXY_URL_EFFECTIVE
         
         if not final_customer_id:
             return api_error("缺少Google Ads客户ID，请在环境变量中配置GOOGLE_ADS_CUSTOMER_ID或在请求中提供", code=400)

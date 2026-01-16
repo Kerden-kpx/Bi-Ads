@@ -219,7 +219,7 @@ async def sync_facebook_ads_data(
             start_date=start_date,
             end_date=end_date,
             account_id_for_db=final_ad_account_id,  # 传递不带前缀的ID用于数据库保存
-            proxy_url=proxy_url or settings.FACEBOOK_PROXY_URL
+            proxy_url=proxy_url or settings.FACEBOOK_PROXY_URL_EFFECTIVE
         )
         
         if result["success"]:

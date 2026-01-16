@@ -11,6 +11,10 @@ from dotenv import load_dotenv
 
 from app.api import facebook, google, lingxing, cache, summary, settings as settings_api
 from app.core.config import settings
+from app.core.scheduler import (
+    start_facebook_ads_daily_sync_task,
+    start_google_ads_daily_sync_task,
+)
 
 # 加载环境变量
 load_dotenv()
@@ -44,6 +48,24 @@ app.include_router(lingxing.router, prefix="/api/dashboard/lingxing", tags=["Lin
 app.include_router(summary.router, prefix="/api/dashboard/summary", tags=["Summary Dashboard"])
 app.include_router(cache.router, prefix="/api/cache", tags=["Cache Management"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"])
+
+
+@app.on_event("startup")
+async def start_scheduler():
+    app.state.scheduler_tasks = []
+    if settings.GOOGLE_ADS_DAILY_SYNC_ENABLED:
+        app.state.scheduler_tasks.append(start_google_ads_daily_sync_task())
+        print("✅ [scheduler] Google Ads daily sync enabled")
+    if settings.FACEBOOK_DAILY_SYNC_ENABLED:
+        app.state.scheduler_tasks.append(start_facebook_ads_daily_sync_task())
+        print("✅ [scheduler] Facebook Ads daily sync enabled")
+
+
+@app.on_event("shutdown")
+async def stop_scheduler():
+    tasks = getattr(app.state, "scheduler_tasks", [])
+    for task in tasks:
+        task.cancel()
 
 # 健康检查
 @app.get("/health")
@@ -87,4 +109,3 @@ if __name__ == "__main__":
         port=settings.PORT,
         reload=settings.DEBUG
     )
-

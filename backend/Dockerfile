@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # 可选：切换APT镜像（默认不改源），可在构建时传 APT_MIRROR=mirrors.aliyun.com
 ARG APT_MIRROR=
@@ -23,15 +23,19 @@ WORKDIR /app
 # System deps (curl for healthcheck)
 RUN set -e; \
     if [ -n "${APT_MIRROR}" ]; then \
+        case "${APT_MIRROR}" in \
+            *://*) APT_MIRROR_URL="${APT_MIRROR}" ;; \
+            *) APT_MIRROR_URL="https://${APT_MIRROR}" ;; \
+        esac; \
         if [ -f /etc/apt/sources.list ]; then \
-            sed -i "s@https\?://[^ ]\+debian.org@http://${APT_MIRROR}@g" /etc/apt/sources.list; \
+            sed -i "s@https\?://[^ ]\+debian.org@${APT_MIRROR_URL}@g" /etc/apt/sources.list; \
         fi; \
         if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
-            sed -i "s@https\?://[^ ]\+debian.org@http://${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources; \
+            sed -i "s@https\?://[^ ]\+debian.org@${APT_MIRROR_URL}@g" /etc/apt/sources.list.d/debian.sources; \
         fi; \
     fi; \
     export DEBIAN_FRONTEND=noninteractive; \
-    apt-get update; \
+    apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=5 update; \
     apt-get install -y --no-install-recommends curl ca-certificates; \
     rm -rf /var/lib/apt/lists/*
 
@@ -41,7 +45,7 @@ COPY requirements.txt ./
 # Requires building with DOCKER_BUILDKIT=1 and COMPOSE_DOCKER_CLI_BUILD=1
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=cache,target=/root/.cache/pip-wheel \
-    pip install --no-cache-dir --default-timeout=600 --retries 10 -r requirements.txt
+    pip install --prefer-binary --default-timeout=600 --retries 10 -r requirements.txt
 
 # Copy application code
 COPY . .
