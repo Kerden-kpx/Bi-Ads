@@ -59,7 +59,6 @@ class Settings(BaseSettings):
     GOOGLE_ADS_CUSTOMER_ID: str = ""  # 客户ID
     GOOGLE_ADS_CONFIG_PATH: str = "config/google-ads.yaml"  # 配置文件路径（相对于项目根目录）
     GOOGLE_ADS_JSON_KEY_FILE_PATH: str = "config/seismic-relic-466902-q4-c98779167f0b.json"  # 服务账号JSON密钥文件路径
-    GOOGLE_ADS_PROXY_URL: str = "http://127.0.0.1:10808"  # 代理地址
     PROXY_URL: str = ""  # 通用代理地址（可用于Facebook/Google）
     GOOGLE_ADS_MAX_WORKERS: int = 8  # Google Ads API 并发线程池最大线程数
     GOOGLE_ADS_SUMMARY_MAX_WORKERS: int = 4  # 概览汇总线程池最大线程数
@@ -74,8 +73,8 @@ class Settings(BaseSettings):
 
     @property
     def GOOGLE_ADS_PROXY_URL_EFFECTIVE(self) -> str:
-        """Google Ads 代理地址（优先专用配置，再使用通用代理）"""
-        return self.GOOGLE_ADS_PROXY_URL or self.PROXY_URL
+        """Google Ads 代理地址（使用通用代理）"""
+        return self.PROXY_URL
     
     
     # Gemini AI配置（请在 .env 文件中配置）
