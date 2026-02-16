@@ -7,6 +7,7 @@ import os
 import time
 import hashlib
 import atexit
+import logging
 from threading import Lock
 from typing import List, Tuple, Optional, Dict, Any
 from google.ads.googleads.client import GoogleAdsClient
@@ -19,6 +20,23 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 from app.services.base_sync_service import BaseSyncService
 from app.core.config import settings
+
+logger = logging.getLogger("app.services.google_ads_sync_service")
+
+
+def _log_print(*args, **kwargs) -> None:
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args).strip()
+    if not message:
+        return
+    if "❌" in message:
+        logger.error(message)
+    elif "⚠️" in message or "警告" in message:
+        logger.warning(message)
+    elif "⏳" in message or "进度" in message:
+        logger.debug(message)
+    else:
+        logger.info(message)
 
 _executor_cache: Dict[int, ThreadPoolExecutor] = {}
 _executor_lock = Lock()
@@ -94,9 +112,9 @@ class GoogleAdsDataSyncService(BaseSyncService):
             os.environ['HTTPS_PROXY'] = proxy_url
             os.environ['http_proxy'] = proxy_url
             os.environ['https_proxy'] = proxy_url
-            print(f"🔧 已设置代理: {proxy_url}")
+            _log_print(f"🔧 已设置代理: {proxy_url}")
         else:
-            print("⚠️  未设置代理")
+            _log_print("⚠️  未设置代理")
     
     def initialize_client(self):
         """
@@ -109,20 +127,20 @@ class GoogleAdsDataSyncService(BaseSyncService):
             config_dir = os.path.dirname(os.path.abspath(self.config_path))
             config_filename = os.path.basename(self.config_path)
             
-            print(f"📂 切换到配置目录: {config_dir}")
+            _log_print(f"📂 切换到配置目录: {config_dir}")
             os.chdir(config_dir)
             
             try:
                 # 使用简单的文件名加载（与成功的脚本一致）
                 self.client = GoogleAdsClient.load_from_storage(config_filename)
-                print("✅ Google Ads 客户端初始化成功")
+                _log_print("✅ Google Ads 客户端初始化成功")
                 return True
             finally:
                 # 恢复原始工作目录
                 os.chdir(original_dir)
                 
         except Exception as e:
-            print(f"❌ 初始化 Google Ads 客户端失败: {e}")
+            _log_print(f"❌ 初始化 Google Ads 客户端失败: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -220,7 +238,7 @@ class GoogleAdsDataSyncService(BaseSyncService):
         if cache_key in self._cache:
             # 检查缓存是否过期
             if time.time() < self._cache_ttl.get(cache_key, 0):
-                print(f"🎯 从缓存获取数据: {cache_key[:8]}...")
+                _log_print(f"🎯 从缓存获取数据: {cache_key[:8]}...")
                 return self._cache[cache_key]
             else:
                 # 清除过期缓存
@@ -233,7 +251,7 @@ class GoogleAdsDataSyncService(BaseSyncService):
         """设置缓存"""
         self._cache[cache_key] = data
         self._cache_ttl[cache_key] = time.time() + self.CACHE_DURATION
-        print(f"💾 数据已缓存: {cache_key[:8]}... (TTL: {self.CACHE_DURATION}秒)")
+        _log_print(f"💾 数据已缓存: {cache_key[:8]}... (TTL: {self.CACHE_DURATION}秒)")
     
     @retry(
         stop=stop_after_attempt(3),  # 最多重试3次
@@ -358,7 +376,7 @@ class GoogleAdsDataSyncService(BaseSyncService):
             cached_full_data = self._get_from_cache(full_cache_key)
             if cached_full_data:
                 elapsed = time.time() - start_time
-                print(f"⚡ 从缓存获取完整概览数据，耗时: {elapsed:.2f}秒")
+                _log_print(f"⚡ 从缓存获取完整概览数据，耗时: {elapsed:.2f}秒")
                 return True, cached_full_data[0], ""
             
             # 使用并发执行提升速度（受配置限制的线程池）
@@ -427,22 +445,22 @@ class GoogleAdsDataSyncService(BaseSyncService):
             
             elapsed = time.time() - start_time
             
-            print(f"\n📊 概览汇总数据 ({start_date} 至 {end_date}):")
-            print(f"   展示次数: {summary_data['impressions']:,}")
-            print(f"   点击次数: {summary_data['clicks']:,}")
-            print(f"   点击率: {summary_data['ctr']:.2f}%")
-            print(f"   转化次数: {summary_data['conversions']:,}")
-            print(f"   转化价值: ${summary_data['conversions_value']:,.2f}")
-            print(f"   总成本: ${summary_data['cost']:,.2f}")
-            print(f"   平均CPC: ${summary_data['average_cpc']:.2f}")
-            print(f"   每日数据点: {len(summary_data['daily_data'])} 天")
-            print(f"   ⚡ API请求耗时: {elapsed:.2f}秒")
+            _log_print(f"\n📊 概览汇总数据 ({start_date} 至 {end_date}):")
+            _log_print(f"   展示次数: {summary_data['impressions']:,}")
+            _log_print(f"   点击次数: {summary_data['clicks']:,}")
+            _log_print(f"   点击率: {summary_data['ctr']:.2f}%")
+            _log_print(f"   转化次数: {summary_data['conversions']:,}")
+            _log_print(f"   转化价值: ${summary_data['conversions_value']:,.2f}")
+            _log_print(f"   总成本: ${summary_data['cost']:,.2f}")
+            _log_print(f"   平均CPC: ${summary_data['average_cpc']:.2f}")
+            _log_print(f"   每日数据点: {len(summary_data['daily_data'])} 天")
+            _log_print(f"   ⚡ API请求耗时: {elapsed:.2f}秒")
             
             if compare_start_date and compare_end_date:
-                print(f"\n📊 对比期数据 ({compare_start_date} 至 {compare_end_date}):")
-                print(f"   展示次数: {summary_data['compare_impressions']:,}")
-                print(f"   点击次数: {summary_data['compare_clicks']:,}")
-                print(f"   对比期数据点: {len(summary_data['compare_daily_data'])} 天")
+                _log_print(f"\n📊 对比期数据 ({compare_start_date} 至 {compare_end_date}):")
+                _log_print(f"   展示次数: {summary_data['compare_impressions']:,}")
+                _log_print(f"   点击次数: {summary_data['compare_clicks']:,}")
+                _log_print(f"   对比期数据点: {len(summary_data['compare_daily_data'])} 天")
             
             # 缓存完整结果
             self._set_to_cache(full_cache_key, (summary_data, []))
@@ -450,17 +468,17 @@ class GoogleAdsDataSyncService(BaseSyncService):
             return True, summary_data, ""
             
         except GoogleAdsException as ex:
-            print(f"❌ Google Ads API 错误:")
+            _log_print(f"❌ Google Ads API 错误:")
             error_msg = ""
             for error in ex.failure.errors:
-                print(f"   错误代码: {error.error_code.name}")
-                print(f"   错误信息: {error.message}")
+                _log_print(f"   错误代码: {error.error_code.name}")
+                _log_print(f"   错误信息: {error.message}")
                 error_msg += f"错误代码: {error.error_code.name}, 错误信息: {error.message}\n"
             return False, {}, error_msg
             
         except Exception as e:
             error_msg = f"获取概览汇总数据时出错: {str(e)}"
-            print(f"❌ {error_msg}")
+            _log_print(f"❌ {error_msg}")
             return False, {}, error_msg
     
     def fetch_campaigns_data(
@@ -533,26 +551,26 @@ class GoogleAdsDataSyncService(BaseSyncService):
                         segments.date
                     ))
                     
-                    print(f"{campaign.id:<12} {campaign.name:<30} {metrics.impressions:<12} {conversions:<20} {metrics.cost_micros:<20.2f} {metrics.clicks:<20} {conversions_value:<20} {segments.date:<20}")
+                    _log_print(f"{campaign.id:<12} {campaign.name:<30} {metrics.impressions:<12} {conversions:<20} {metrics.cost_micros:<20.2f} {metrics.clicks:<20} {conversions_value:<20} {segments.date:<20}")
             
-            print(f"总共找到 {campaigns_found} 个广告系列")
+            _log_print(f"总共找到 {campaigns_found} 个广告系列")
             return True, ads_data, ""
             
         except GoogleAdsException as ex:
-            print(f"❌ Google Ads API 错误:")
+            _log_print(f"❌ Google Ads API 错误:")
             error_msg = ""
             for error in ex.failure.errors:
-                print(f"   错误代码: {error.error_code.name}")
-                print(f"   错误信息: {error.message}")
+                _log_print(f"   错误代码: {error.error_code.name}")
+                _log_print(f"   错误信息: {error.message}")
                 error_msg += f"错误代码: {error.error_code.name}, 错误信息: {error.message}\n"
                 if error.location:
                     for field_path_element in error.location.field_path_elements:
-                        print(f"   字段: {field_path_element.field_name}")
+                        _log_print(f"   字段: {field_path_element.field_name}")
             return False, [], error_msg
             
         except Exception as e:
             error_msg = f"获取广告系列时出错: {str(e)}"
-            print(f"❌ {error_msg}")
+            _log_print(f"❌ {error_msg}")
             return False, [], error_msg
     
     def fetch_campaigns_data_concurrent(
@@ -580,12 +598,12 @@ class GoogleAdsDataSyncService(BaseSyncService):
         try:
             # 生成日期列表
             date_list = self._generate_date_list(start_date, end_date)
-            print(f"📅 将并发获取 {len(date_list)} 天的数据: {start_date} 到 {end_date}")
+            _log_print(f"📅 将并发获取 {len(date_list)} 天的数据: {start_date} 到 {end_date}")
             effective_workers = min(max_workers, settings.GOOGLE_ADS_MAX_WORKERS)
             if effective_workers != max_workers:
-                print(f"🚀 请求 {max_workers} 个并发线程，已根据配置限制为 {effective_workers} 个")
+                _log_print(f"🚀 请求 {max_workers} 个并发线程，已根据配置限制为 {effective_workers} 个")
             else:
-                print(f"🚀 使用 {effective_workers} 个并发线程")
+                _log_print(f"🚀 使用 {effective_workers} 个并发线程")
             
             all_ads_data = []
             completed_dates = 0
@@ -609,20 +627,20 @@ class GoogleAdsDataSyncService(BaseSyncService):
                     if success and date_data:
                         all_ads_data.extend(date_data)
                     elif not success:
-                        print(f"   ⚠️  {date} 获取失败: {error_msg}")
+                        _log_print(f"   ⚠️  {date} 获取失败: {error_msg}")
                     
                     # 显示进度
                     progress = (completed_dates / total_dates) * 100
-                    print(f"⏳ 进度: {completed_dates}/{total_dates} ({progress:.1f}%) - 已获取 {len(all_ads_data)} 条数据")
+                    _log_print(f"⏳ 进度: {completed_dates}/{total_dates} ({progress:.1f}%) - 已获取 {len(all_ads_data)} 条数据")
                 except Exception as e:
-                    print(f"   ⚠️  {date} 处理失败: {e}")
+                    _log_print(f"   ⚠️  {date} 处理失败: {e}")
             
-            print(f"\n🎉 并发获取完成！总共找到 {len(all_ads_data)} 条广告数据")
+            _log_print(f"\n🎉 并发获取完成！总共找到 {len(all_ads_data)} 条广告数据")
             return True, all_ads_data, ""
             
         except Exception as e:
             error_msg = f"并发获取数据失败: {str(e)}"
-            print(f"❌ {error_msg}")
+            _log_print(f"❌ {error_msg}")
             return False, [], error_msg
     
     def sync_to_database(
@@ -687,7 +705,7 @@ class GoogleAdsDataSyncService(BaseSyncService):
         except Exception as e:
             self.db.rollback()
             error_msg = f"数据库错误: {str(e)}"
-            print(error_msg)
+            _log_print(error_msg)
             return False, error_msg
     
     def sync_campaigns(
@@ -718,10 +736,10 @@ class GoogleAdsDataSyncService(BaseSyncService):
         start_time = time.time()
         
         try:
-            print(f"\n{'='*60}")
-            print(f"🚀 开始同步 Google Ads 数据（{'并发' if use_concurrent else '串行'}模式）")
-            print(f"📅 日期范围: {start_date} 到 {end_date}")
-            print(f"{'='*60}\n")
+            _log_print(f"\n{'='*60}")
+            _log_print(f"🚀 开始同步 Google Ads 数据（{'并发' if use_concurrent else '串行'}模式）")
+            _log_print(f"📅 日期范围: {start_date} 到 {end_date}")
+            _log_print(f"{'='*60}\n")
             
             # 设置代理（如果提供）
             if proxy_url:
@@ -732,7 +750,7 @@ class GoogleAdsDataSyncService(BaseSyncService):
                 return self.create_sync_result(False, "初始化 Google Ads 客户端失败", 0, ["初始化失败"])
             
             # 获取数据（选择并发或串行模式）
-            print("\n📡 从 Google Ads API 获取数据...")
+            _log_print("\n📡 从 Google Ads API 获取数据...")
             if use_concurrent:
                 success, data_list, error_msg = self.fetch_campaigns_data_concurrent(
                     customer_id, start_date, end_date, max_workers
@@ -745,22 +763,22 @@ class GoogleAdsDataSyncService(BaseSyncService):
             if not success:
                 return self.create_sync_result(False, error_msg, 0, [error_msg])
             
-            print(f"✅ 成功获取 {len(data_list)} 条广告数据")
+            _log_print(f"✅ 成功获取 {len(data_list)} 条广告数据")
             
             # 同步到数据库
-            print("\n💾 写入数据库...")
+            _log_print("\n💾 写入数据库...")
             success, message = self.sync_to_database(data_list, start_date, end_date, clear_existing)
             if not success:
                 return self.create_sync_result(False, message, 0, [message])
             
             elapsed_time = time.time() - start_time
             
-            print(f"\n{'='*60}")
-            print(f"✅ Google Ads 数据同步完成！")
-            print(f"📊 共同步 {len(data_list)} 条记录")
-            print(f"⏱️  总耗时: {elapsed_time:.2f} 秒")
-            print(f"⚡ 平均速度: {len(data_list)/elapsed_time:.2f} 条/秒")
-            print(f"{'='*60}\n")
+            _log_print(f"\n{'='*60}")
+            _log_print(f"✅ Google Ads 数据同步完成！")
+            _log_print(f"📊 共同步 {len(data_list)} 条记录")
+            _log_print(f"⏱️  总耗时: {elapsed_time:.2f} 秒")
+            _log_print(f"⚡ 平均速度: {len(data_list)/elapsed_time:.2f} 条/秒")
+            _log_print(f"{'='*60}\n")
             
             # 成功
             return self.create_sync_result(True, f"{message}（耗时 {elapsed_time:.2f}秒）", len(data_list))

@@ -48,6 +48,23 @@ router.afterEach((to) => {
 
 const getStoredToken = () => window.localStorage.getItem('auth_token') || ''
 
+const AUTH_STAGE_LABELS = {
+  environment: '环境检查',
+  'jsapi-sign': '签名接口',
+  config: '钉钉 JSAPI 配置',
+  'auth-code': '获取授权码',
+  login: '登录接口',
+  unknown: '未知阶段'
+}
+
+const escapeHtml = (value) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
 const showAuthLoading = () => {
   const root = document.getElementById('app')
   if (!root) return
@@ -58,12 +75,22 @@ const showAuthLoading = () => {
   `
 }
 
-const showAuthError = () => {
+const showAuthError = (error) => {
   const root = document.getElementById('app')
   if (!root) return
+  const stage = error?.stage || 'unknown'
+  const stageLabel = AUTH_STAGE_LABELS[stage] || AUTH_STAGE_LABELS.unknown
+  const reason = error?.detail || error?.message || '未知错误'
+  const requestId = error?.requestId || ''
   root.innerHTML = `
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f9fb;color:#f56c6c;font-size:14px;">
-      登录失败，请在钉钉客户端内打开页面后重试
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f9fb;color:#303133;font-size:14px;">
+      <div style="max-width:680px;padding:24px;text-align:center;line-height:1.7;">
+        <div style="font-size:16px;font-weight:600;color:#f56c6c;">登录失败</div>
+        <div style="margin-top:8px;color:#606266;">失败阶段：${escapeHtml(stageLabel)}</div>
+        <div style="margin-top:8px;color:#f56c6c;word-break:break-word;">原因：${escapeHtml(reason)}</div>
+        ${requestId ? `<div style="margin-top:8px;color:#909399;word-break:break-word;">请求ID：${escapeHtml(requestId)}</div>` : ''}
+        <div style="margin-top:8px;color:#909399;">请在钉钉客户端内重试；如仍失败，请把请求ID发给管理员排查。</div>
+      </div>
     </div>
   `
 }
@@ -97,7 +124,7 @@ const bootstrap = async () => {
     mountApp()
   } catch (error) {
     console.warn('DingTalk auth failed:', error)
-    showAuthError()
+    showAuthError(error)
   }
 }
 

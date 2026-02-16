@@ -20,7 +20,7 @@ _TICKET_CACHE: Dict[str, Any] = {"ticket": None, "expires_at": 0}
 
 _USER_SELECT_SQL = text(
     """
-    SELECT dingtalk_userid, dingtalk_username, avatar_url, created_at
+    SELECT dingtalk_userid, dingtalk_username, created_at
     FROM dim_bi_ads_user
     WHERE dingtalk_userid = :userid
     LIMIT 1
@@ -56,7 +56,10 @@ def _ensure_ok(resp: Dict[str, Any], context: str) -> None:
     errcode = resp.get("errcode")
     if errcode not in (0, None):
         errmsg = resp.get("errmsg") or resp.get("message") or "unknown error"
-        raise HTTPException(status_code=502, detail=f"{context} 失败: {errmsg}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"{context} 失败: errcode={errcode}, errmsg={errmsg}",
+        )
 
 
 def _get_access_token() -> str:
@@ -136,38 +139,9 @@ def _get_userid_from_auth_code(auth_code: str) -> str:
     return str(userid)
 
 
-def _get_user_detail(userid: str) -> Dict[str, Any]:
-    token = _get_access_token()
-    url = f"{settings.DINGTALK_USER_DETAIL_URL}?access_token={token}"
-    resp = _http_post_json(url, {"userid": userid})
-    _ensure_ok(resp, "获取用户详情")
-    return resp.get("result") or {}
-
-
 def _fetch_user(db: Session, userid: str) -> Dict[str, Any] | None:
     row = db.execute(_USER_SELECT_SQL, {"userid": userid}).mappings().first()
     return dict(row) if row else None
-
-
-def _upsert_user(db: Session, userid: str, username: str, avatar_url: str | None) -> Dict[str, Any]:
-    db.execute(
-        text(
-            """
-            INSERT INTO dim_bi_ads_user (dingtalk_userid, dingtalk_username, avatar_url)
-            VALUES (:userid, :username, :avatar_url)
-            ON DUPLICATE KEY UPDATE
-                dingtalk_username = VALUES(dingtalk_username),
-                avatar_url = VALUES(avatar_url)
-            """
-        ),
-        {"userid": userid, "username": username, "avatar_url": avatar_url},
-    )
-    db.commit()
-
-    user = _fetch_user(db, userid)
-    if not user:
-        raise HTTPException(status_code=500, detail="用户写入失败")
-    return user
 
 
 def login_with_auth_code(db: Session, auth_code: str) -> Dict[str, Any]:
@@ -176,14 +150,12 @@ def login_with_auth_code(db: Session, auth_code: str) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="缺少 auth_code")
 
     userid = _get_userid_from_auth_code(code)
-    detail = _get_user_detail(userid)
-    username = str(detail.get("name") or detail.get("nick") or userid)
-    avatar_url = detail.get("avatar") or detail.get("avatar_url")
-
-    user = _upsert_user(db, userid, username, avatar_url)
+    user = _fetch_user(db, userid)
+    if not user:
+        raise HTTPException(status_code=403, detail="用户不存在或无权限")
     token = create_access_token(
         userid=str(user.get("dingtalk_userid") or userid),
-        username=str(user.get("dingtalk_username") or username),
+        username=str(user.get("dingtalk_username") or userid),
     )
     return {"user": user, "token": token}
 
@@ -192,10 +164,10 @@ def refresh_user_profile(db: Session, userid: str) -> Dict[str, Any]:
     if not userid:
         raise HTTPException(status_code=400, detail="缺少 userid")
 
-    detail = _get_user_detail(userid)
-    username = str(detail.get("name") or detail.get("nick") or userid)
-    avatar_url = detail.get("avatar") or detail.get("avatar_url")
-    return _upsert_user(db, userid, username, avatar_url)
+    user = _fetch_user(db, userid)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return user
 
 
 def get_user_profile(db: Session, userid: str) -> Dict[str, Any]:

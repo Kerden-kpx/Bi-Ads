@@ -2,9 +2,33 @@
 基础数据同步服务类
 提供通用的数据同步逻辑
 """
+import logging
 from typing import List, Tuple, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+
+logger = logging.getLogger("app.services.base_sync_service")
+ALLOWED_SYNC_TABLES = frozenset(
+    {
+        "fact_bi_ads_google_campaign",
+        "fact_bi_ads_facebook_campaign",
+    }
+)
+
+
+def _log_print(*args, **kwargs) -> None:
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args).strip()
+    if not message:
+        return
+    if "❌" in message:
+        logger.error(message)
+    elif "⚠️" in message or "警告" in message:
+        logger.warning(message)
+    elif "⏳" in message or "进度" in message:
+        logger.debug(message)
+    else:
+        logger.info(message)
 
 
 class BaseSyncService:
@@ -18,6 +42,8 @@ class BaseSyncService:
             db: 数据库会话
             table_name: 表名
         """
+        if table_name not in ALLOWED_SYNC_TABLES:
+            raise ValueError(f"不允许的同步表名: {table_name}")
         self.db = db
         self.table_name = table_name
     
@@ -31,7 +57,7 @@ class BaseSyncService:
         """
         delete_query = text(f"DELETE FROM {self.table_name} WHERE createtime BETWEEN :start_date AND :end_date")
         self.db.execute(delete_query, {"start_date": start_date, "end_date": end_date})
-        print(f"🗑️  已删除日期范围 {start_date} 到 {end_date} 的数据")
+        _log_print(f"🗑️  已删除日期范围 {start_date} 到 {end_date} 的数据")
     
     def batch_insert(
         self, 
@@ -65,9 +91,9 @@ class BaseSyncService:
             
             # 显示进度
             progress = (inserted_count / total_count) * 100
-            print(f"⏳ 插入进度: {inserted_count}/{total_count} ({progress:.1f}%)")
+            _log_print(f"⏳ 插入进度: {inserted_count}/{total_count} ({progress:.1f}%)")
         
-        print(f"✅ 成功插入 {inserted_count} 条数据")
+        _log_print(f"✅ 成功插入 {inserted_count} 条数据")
         return inserted_count
     
     def create_sync_result(

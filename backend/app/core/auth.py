@@ -19,12 +19,11 @@ class CurrentUser:
 
     userid: str
     username: str
-    avatar_url: str | None = None
 
 
 _USER_SELECT_SQL = text(
     """
-    SELECT dingtalk_userid, dingtalk_username, avatar_url, created_at
+    SELECT dingtalk_userid, dingtalk_username, created_at
     FROM dim_bi_ads_user
     WHERE dingtalk_userid = :userid
     LIMIT 1
@@ -89,7 +88,6 @@ def authenticate_request(request: Request) -> CurrentUser:
     return CurrentUser(
         userid=str(user.get("dingtalk_userid") or userid),
         username=str(user.get("dingtalk_username") or userid),
-        avatar_url=user.get("avatar_url"),
     )
 
 

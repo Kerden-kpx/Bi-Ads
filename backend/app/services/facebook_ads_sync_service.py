@@ -25,6 +25,7 @@ import json
 import requests
 import threading
 import os
+import logging
 from datetime import datetime, timedelta
 from typing import List, Tuple, Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -42,6 +43,23 @@ import hashlib
 
 from app.services.base_sync_service import BaseSyncService
 from app.core.config import settings
+
+logger = logging.getLogger("app.services.facebook_ads_sync_service")
+
+
+def _log_print(*args, **kwargs) -> None:
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args).strip()
+    if not message:
+        return
+    if "❌" in message:
+        logger.error(message)
+    elif "⚠️" in message or "警告" in message:
+        logger.warning(message)
+    elif "⏳" in message or "进度" in message:
+        logger.debug(message)
+    else:
+        logger.info(message)
 
 
 # ==================== 性能统计类 ====================
@@ -72,17 +90,17 @@ class PerformanceStats:
 
     def print_summary(self):
         """打印性能摘要"""
-        print(f"\n{'='*60}")
-        print("⏱️  性能统计摘要:")
-        print(f"{'='*60}")
+        _log_print(f"\n{'='*60}")
+        _log_print("⏱️  性能统计摘要:")
+        _log_print(f"{'='*60}")
         total_time = 0
         for key, data in self.stats.items():
             if data['duration']:
-                print(f"  {key}: {data['duration']:.2f} 秒")
+                _log_print(f"  {key}: {data['duration']:.2f} 秒")
                 total_time += data['duration']
-        print(f"  {'─'*56}")
-        print(f"  总计: {total_time:.2f} 秒")
-        print(f"{'='*60}\n")
+        _log_print(f"  {'─'*56}")
+        _log_print(f"  总计: {total_time:.2f} 秒")
+        _log_print(f"{'='*60}\n")
 
 
 # ==================== 性能配置类 ====================
@@ -287,9 +305,9 @@ class FacebookAdsDataSyncService(BaseSyncService):
             os.environ['HTTPS_PROXY'] = proxy_url
             os.environ['http_proxy'] = proxy_url
             os.environ['https_proxy'] = proxy_url
-            print(f"🔧 Facebook 代理已设置: {proxy_url}")
+            _log_print(f"🔧 Facebook 代理已设置: {proxy_url}")
         else:
-            print("ℹ️ 未设置 Facebook 代理，使用直连")
+            _log_print("ℹ️ 未设置 Facebook 代理，使用直连")
     
     def initialize_api(self, access_token: str, ad_account_id: str) -> bool:
         """初始化 Facebook API"""
@@ -298,10 +316,10 @@ class FacebookAdsDataSyncService(BaseSyncService):
             self.ad_account = AdAccount(ad_account_id)
             self.access_token = access_token  # 保存 access_token 用于 Batch API
             self.api_initialized = True
-            print("✅ Facebook Ads API 初始化成功")
+            _log_print("✅ Facebook Ads API 初始化成功")
             return True
         except Exception as e:
-            print(f"❌ 初始化失败: {e}")
+            _log_print(f"❌ 初始化失败: {e}")
             return False
     
     def _extract_purchase_roas(self, insight: Dict) -> float:
@@ -369,8 +387,8 @@ class FacebookAdsDataSyncService(BaseSyncService):
         preview_info = {}
 
         total = len(ad_ids)
-        print(f"🚀 使用Batch API批量获取创意和预览信息...")
-        print(f"   广告总数: {total}, 批次大小: {self.BATCH_SIZE}")
+        _log_print(f"🚀 使用Batch API批量获取创意和预览信息...")
+        _log_print(f"   广告总数: {total}, 批次大小: {self.BATCH_SIZE}")
 
         self.perf_stats.start_timer("Batch API 获取")
         start_time = time.time()
@@ -461,7 +479,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
 
                         # 进度条
                         progress = '█' * int(completed/total * 30) + '░' * (30 - int(completed/total * 30))
-                        print(f"   [{progress}] {completed}/{total} ({completed/total*100:.1f}%)", end='\r')
+                        _log_print(f"   [{progress}] {completed}/{total} ({completed/total*100:.1f}%)", end='\r')
                         if batch_idx < len(batches):
                             time.sleep(0.1)
                         break
@@ -470,25 +488,25 @@ class FacebookAdsDataSyncService(BaseSyncService):
                         # 速率限制 - 使用指数退避
                         if retry < self.MAX_RETRIES - 1:
                             wait_time = min(self.RETRY_DELAY * (2 ** retry), 60)  # 最多等待60秒
-                            print(f"\n   ⚠️  速率限制，等待 {wait_time:.0f} 秒... (尝试 {retry + 1}/{self.MAX_RETRIES})")
+                            _log_print(f"\n   ⚠️  速率限制，等待 {wait_time:.0f} 秒... (尝试 {retry + 1}/{self.MAX_RETRIES})")
                             time.sleep(wait_time)
                         else:
-                            print(f"\n   ❌ 批次 {batch_idx} 失败（超过重试次数）")
+                            _log_print(f"\n   ❌ 批次 {batch_idx} 失败（超过重试次数）")
                             failed_batches.append(batch_idx)
                             set_batch_empty(batch)
                     else:
                         # 其他错误 - 短暂等待后重试
                         if retry < self.MAX_RETRIES - 1:
-                            print(f"\n   ⚠️  请求失败 (状态码: {response.status_code})，等待 2 秒后重试...")
+                            _log_print(f"\n   ⚠️  请求失败 (状态码: {response.status_code})，等待 2 秒后重试...")
                             time.sleep(2)
                         else:
-                            print(f"\n   ❌ 批次 {batch_idx} 失败")
+                            _log_print(f"\n   ❌ 批次 {batch_idx} 失败")
                             failed_batches.append(batch_idx)
                             set_batch_empty(batch)
 
                 except Exception as e:
                     if retry >= self.MAX_RETRIES - 1:
-                        print(f"\n   ❌ 批次 {batch_idx} 异常: {e}")
+                        _log_print(f"\n   ❌ 批次 {batch_idx} 异常: {e}")
                         failed_batches.append(batch_idx)
                         set_batch_empty(batch)
                     else:
@@ -497,10 +515,10 @@ class FacebookAdsDataSyncService(BaseSyncService):
         elapsed = time.time() - start_time
         self.perf_stats.end_timer("Batch API 获取")
 
-        print(f"\n   ✅ Batch API获取完成（耗时: {elapsed:.2f}秒, 速度: {total/elapsed:.1f} 条/秒）")
+        _log_print(f"\n   ✅ Batch API获取完成（耗时: {elapsed:.2f}秒, 速度: {total/elapsed:.1f} 条/秒）")
         if failed_batches:
-            print(f"   ⚠️  失败批次数: {len(failed_batches)}/{len(batches)}")
-        print()
+            _log_print(f"   ⚠️  失败批次数: {len(failed_batches)}/{len(batches)}")
+        _log_print()
 
         return creative_info, preview_info
     
@@ -601,7 +619,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
         
         result_dict = {}
         total = len(ad_ids)
-        print(f"{desc}（并发模式，{max_workers}个线程）...")
+        _log_print(f"{desc}（并发模式，{max_workers}个线程）...")
 
         start_time = time.time()
         last_update_time = start_time
@@ -629,18 +647,18 @@ class FacebookAdsDataSyncService(BaseSyncService):
                         elapsed = current_time - start_time
                         speed = completed / elapsed if elapsed > 0 else 0
                         progress = '█' * int(completed/total * 30) + '░' * (30 - int(completed/total * 30))
-                        print(f"   [{progress}] {completed}/{total} ({completed/total*100:.1f}%) - {speed:.1f} 条/秒", end='\r')
+                        _log_print(f"   [{progress}] {completed}/{total} ({completed/total*100:.1f}%) - {speed:.1f} 条/秒", end='\r')
                         last_update_time = current_time
 
                 except Exception as e:
                     ad_id = future_to_ad[future]
                     # 只打印关键错误，避免刷屏
                     if completed <= 5:  # 只打印前5个错误
-                        print(f"\n   ⚠️  获取广告 {ad_id} 失败: {e}")
+                        _log_print(f"\n   ⚠️  获取广告 {ad_id} 失败: {e}")
 
         elapsed = time.time() - start_time
         speed = len(result_dict) / elapsed if elapsed > 0 else 0
-        print(f"\n   ✅ 成功获取 {len(result_dict)}/{total} 条（耗时: {elapsed:.2f}秒，速度: {speed:.1f} 条/秒）\n")
+        _log_print(f"\n   ✅ 成功获取 {len(result_dict)}/{total} 条（耗时: {elapsed:.2f}秒，速度: {speed:.1f} 条/秒）\n")
         return result_dict
 
     def get_ad_creatives_batch(self, ad_ids: List[str]) -> Dict:
@@ -692,17 +710,17 @@ class FacebookAdsDataSyncService(BaseSyncService):
             except FacebookRequestError as e:
                 if e.http_status() == 403 and e.api_error_code() == 4:
                     wait_time = (2 ** attempt) * 10
-                    print(f"API限制，等待 {wait_time}秒 (尝试 {attempt + 1}/{max_retries})")
+                    _log_print(f"API限制，等待 {wait_time}秒 (尝试 {attempt + 1}/{max_retries})")
                     time.sleep(wait_time)
                 else:
                     raise
             except Exception as e:
                 if attempt < max_retries - 1:
                     wait_time = (2 ** attempt) * 5
-                    print(f"错误: {e}，{wait_time}秒后重试")
+                    _log_print(f"错误: {e}，{wait_time}秒后重试")
                     time.sleep(wait_time)
                 else:
-                    print(f"获取广告 {ad_id} 在 {date} 的数据失败: {e}")
+                    _log_print(f"获取广告 {ad_id} 在 {date} 的数据失败: {e}")
                     return None
         return None
     
@@ -765,7 +783,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
         try:
             # 验证必要的 ID
             if not ad_id or not adset_id or not campaign_id:
-                print(f"   ⚠️  跳过 {ad_name}: 缺少必要的 ID 信息")
+                _log_print(f"   ⚠️  跳过 {ad_name}: 缺少必要的 ID 信息")
                 return None
             
             insights = self.get_ad_insights_with_retry(ad_id, date)
@@ -781,7 +799,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
                 }
                 return self._convert_to_tuple(data_row, date, account_id)
         except Exception as e:
-            print(f"   ⚠️  跳过 {ad_name} ({date}): {e}")
+            _log_print(f"   ⚠️  跳过 {ad_name} ({date}): {e}")
         return None
     
     def _fetch_ads_data_in_batches(
@@ -821,7 +839,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
             batch_start_str = current_start.strftime('%Y-%m-%d')
             batch_end_str = current_end.strftime('%Y-%m-%d')
             
-            print(f"\n📦 批次 {batch_num}: {batch_start_str} 到 {batch_end_str}")
+            _log_print(f"\n📦 批次 {batch_num}: {batch_start_str} 到 {batch_end_str}")
             
             # 获取当前批次的数据
             success, batch_data, error_msg = self._fetch_single_batch(
@@ -832,11 +850,11 @@ class FacebookAdsDataSyncService(BaseSyncService):
             )
             
             if not success:
-                print(f"   ⚠️  批次 {batch_num} 失败: {error_msg}")
+                _log_print(f"   ⚠️  批次 {batch_num} 失败: {error_msg}")
                 # 继续处理下一批次，不中断整个流程
             else:
                 all_data_tuples.extend(batch_data)
-                print(f"   ✅ 批次 {batch_num} 完成: 获取 {len(batch_data)} 条记录")
+                _log_print(f"   ✅ 批次 {batch_num} 完成: 获取 {len(batch_data)} 条记录")
             
             # 移动到下一批次
             current_start = current_end + timedelta(days=1)
@@ -845,7 +863,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
         if not all_data_tuples:
             return False, [], "所有批次均未获取到数据"
         
-        print(f"\n✅ 所有批次处理完成，共获取 {len(all_data_tuples)} 条记录")
+        _log_print(f"\n✅ 所有批次处理完成，共获取 {len(all_data_tuples)} 条记录")
         return True, all_data_tuples, ""
     
     def _fetch_single_batch(
@@ -1035,11 +1053,11 @@ class FacebookAdsDataSyncService(BaseSyncService):
             MAX_DAYS_PER_BATCH = 7
             
             if total_days > MAX_DAYS_PER_BATCH:
-                print(f"📆 日期范围较大（{total_days}天），将分成 {(total_days + MAX_DAYS_PER_BATCH - 1) // MAX_DAYS_PER_BATCH} 批处理...")
+                _log_print(f"📆 日期范围较大（{total_days}天），将分成 {(total_days + MAX_DAYS_PER_BATCH - 1) // MAX_DAYS_PER_BATCH} 批处理...")
                 return self._fetch_ads_data_in_batches(start_date, end_date, account_id, limit, MAX_DAYS_PER_BATCH)
             
             # 使用账户级别的insights API，获取广告的效果数据
-            print("⚡ 正在批量获取广告效果数据...")
+            _log_print("⚡ 正在批量获取广告效果数据...")
             self.perf_stats.start_timer("获取 Insights 数据")
 
             # 获取广告insights（Ad级别）
@@ -1080,7 +1098,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
 
             self.perf_stats.end_timer("获取 Insights 数据")
 
-            print("📥 正在处理数据...")
+            _log_print("📥 正在处理数据...")
             self.perf_stats.start_timer("处理 Insights 数据")
 
             ads_list = []
@@ -1140,10 +1158,10 @@ class FacebookAdsDataSyncService(BaseSyncService):
 
                     # 每处理100条显示一次进度
                     if i % 100 == 0:
-                        print(f"   已处理 {i} 条广告数据...")
+                        _log_print(f"   已处理 {i} 条广告数据...")
 
                 except Exception as e:
-                    print(f"   ⚠️  处理第 {i} 条数据时出错: {e}")
+                    _log_print(f"   ⚠️  处理第 {i} 条数据时出错: {e}")
                     continue
                 
             self.perf_stats.end_timer("处理 Insights 数据")
@@ -1153,7 +1171,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
 
             # 获取广告创意和预览信息
             if ads_list and ad_ids:
-                print()
+                _log_print()
 
                 # 启动性能计时
                 self.perf_stats.start_timer("获取创意和预览")
@@ -1172,7 +1190,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
                 self.perf_stats.end_timer("获取创意和预览")
 
                 # 将创意和预览信息合并到广告数据中，生成最终数据记录
-                print("📝 正在生成数据记录...")
+                _log_print("📝 正在生成数据记录...")
                 self.perf_stats.start_timer("生成数据记录")
                 
                 # 初始化数据列表
@@ -1212,26 +1230,26 @@ class FacebookAdsDataSyncService(BaseSyncService):
                 
                 self.perf_stats.end_timer("生成数据记录")
 
-            print(f"\n✅ 数据获取完成！")
-            print(f"唯一广告数: {len(ad_ids)}")
-            print(f"数据记录数: {len(ads_list)} (包含每天的数据)")
-            print(f"总花费: ${total_spend:.2f}")
-            print(f"生成数据库记录数: {len(all_data_tuples)}")
+            _log_print(f"\n✅ 数据获取完成！")
+            _log_print(f"唯一广告数: {len(ad_ids)}")
+            _log_print(f"数据记录数: {len(ads_list)} (包含每天的数据)")
+            _log_print(f"总花费: ${total_spend:.2f}")
+            _log_print(f"生成数据库记录数: {len(all_data_tuples)}")
 
             return True, all_data_tuples, ""
             
         except FacebookRequestError as e:
             if e.api_error_code() == 17:
                 error_msg = f"遇到API速率限制: {e.api_error_message()}"
-                print(f"\n❌ {error_msg}")
-                print(f"   建议等待 5-10 分钟后再试")
+                _log_print(f"\n❌ {error_msg}")
+                _log_print(f"   建议等待 5-10 分钟后再试")
             else:
                 error_msg = f"API请求失败 (代码: {e.api_error_code()}): {e.api_error_message()}"
-                print(f"\n❌ {error_msg}")
+                _log_print(f"\n❌ {error_msg}")
             return False, [], error_msg
         except Exception as e:
             error_msg = f"获取广告数据失败: {str(e)}"
-            print(f"\n❌ {error_msg}")
+            _log_print(f"\n❌ {error_msg}")
             import traceback
             traceback.print_exc()
             return False, [], error_msg
@@ -1250,7 +1268,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
                 f"DELETE FROM {self.table_name} WHERE createtime BETWEEN :start_date AND :end_date AND account_id = :account_id"
             )
             self.db.execute(delete_query, {"start_date": start_date, "end_date": end_date, "account_id": account_id})
-            print(f"🗑️  已删除账户 {account_id} 日期范围 {start_date} 到 {end_date} 的数据")
+            _log_print(f"🗑️  已删除账户 {account_id} 日期范围 {start_date} 到 {end_date} 的数据")
         else:
             # 如果没有指定账户ID，调用父类方法
             super().delete_data_in_range(start_date, end_date)
@@ -1310,7 +1328,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
                         'createtime': r[16]
                     }
                 else:
-                    print(f"   ⚠️  警告: 数据长度异常 (长度={len(r)}), 跳过此条")
+                    _log_print(f"   ⚠️  警告: 数据长度异常 (长度={len(r)}), 跳过此条")
                     continue
                 
                 data_dicts.append(data_dict)
@@ -1320,7 +1338,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
             
         except Exception as e:
             error_msg = f"插入数据失败: {str(e)}"
-            print(f"❌ {error_msg}")
+            _log_print(f"❌ {error_msg}")
             self.db.rollback()
             return False, 0, error_msg
     
@@ -1363,18 +1381,18 @@ class FacebookAdsDataSyncService(BaseSyncService):
         """
         start_time = time.time()
         
-        print(f"\n{'='*60}")
-        print(f"🚀 开始同步 Facebook Ads 数据（高性能版本 v2.0）")
-        print(f"📅 日期范围: {start_date} 到 {end_date}")
-        print(f"⚙️  性能配置: {self.performance_profile.upper()}")
-        print(f"{'─'*60}")
-        print(f"🔧 优化模式: {'Batch API' if self.USE_BATCH_API else f'高并发线程池 ({self.MAX_CONCURRENT_WORKERS} 线程)'}")
-        print(f"📸 获取预览: {'是' if self.ENABLE_PREVIEW else '否'}")
-        print(f"🌐 HTTP连接池: {self.CONNECTION_POOL_SIZE} 连接 | 超时: {self.REQUEST_TIMEOUT}秒")
-        print(f"💾 数据库批次: {self.DB_BATCH_SIZE} 条/批")
-        print(f"💿 缓存TTL: {self.CACHE_TTL}秒 ({self.CACHE_TTL//3600}小时)")
-        print(f"⚠️  注意: 将覆盖此日期范围内的现有数据")
-        print(f"{'='*60}\n")
+        _log_print(f"\n{'='*60}")
+        _log_print(f"🚀 开始同步 Facebook Ads 数据（高性能版本 v2.0）")
+        _log_print(f"📅 日期范围: {start_date} 到 {end_date}")
+        _log_print(f"⚙️  性能配置: {self.performance_profile.upper()}")
+        _log_print(f"{'─'*60}")
+        _log_print(f"🔧 优化模式: {'Batch API' if self.USE_BATCH_API else f'高并发线程池 ({self.MAX_CONCURRENT_WORKERS} 线程)'}")
+        _log_print(f"📸 获取预览: {'是' if self.ENABLE_PREVIEW else '否'}")
+        _log_print(f"🌐 HTTP连接池: {self.CONNECTION_POOL_SIZE} 连接 | 超时: {self.REQUEST_TIMEOUT}秒")
+        _log_print(f"💾 数据库批次: {self.DB_BATCH_SIZE} 条/批")
+        _log_print(f"💿 缓存TTL: {self.CACHE_TTL}秒 ({self.CACHE_TTL//3600}小时)")
+        _log_print(f"⚠️  注意: 将覆盖此日期范围内的现有数据")
+        _log_print(f"{'='*60}\n")
 
         # 设置代理（如果提供）
         self.setup_proxy(proxy_url)
@@ -1384,7 +1402,7 @@ class FacebookAdsDataSyncService(BaseSyncService):
             return self._create_error_result("Facebook API 初始化失败")
         
         # 获取数据（使用优化版本）
-        print("\n📡 从 Facebook Ads API 获取广告数据...")
+        _log_print("\n📡 从 Facebook Ads API 获取广告数据...")
         # 确定保存到数据库的账户ID（不带前缀）
         final_account_id_for_db = account_id_for_db if account_id_for_db else ad_account_id.replace('act_', '')
         
@@ -1395,10 +1413,10 @@ class FacebookAdsDataSyncService(BaseSyncService):
         if not success:
             return self._create_error_result(error_msg or "获取数据失败", error_msg)
         
-        print(f"✅ 成功获取 {len(data_list)} 条广告数据")
+        _log_print(f"✅ 成功获取 {len(data_list)} 条广告数据")
         
         # 插入数据
-        print("\n💾 写入数据库...")
+        _log_print("\n💾 写入数据库...")
         self.perf_stats.start_timer("数据库插入")
         success, count, error_msg = self.insert_data(data_list, start_date, end_date, final_account_id_for_db)
         self.perf_stats.end_timer("数据库插入")
@@ -1408,24 +1426,24 @@ class FacebookAdsDataSyncService(BaseSyncService):
         
         elapsed_time = time.time() - start_time
         
-        print(f"\n{'='*60}")
-        print(f"✅ Facebook Ads 数据同步完成！")
-        print(f"📊 共同步 {count} 条广告记录（包含每天的数据）")
-        print(f"⏱️  总耗时: {elapsed_time:.2f} 秒")
-        print(f"⚡ 平均速度: {count/elapsed_time:.2f} 条/秒")
-        print(f"🔧 优化模式: {'Batch API' if self.USE_BATCH_API else f'高并发线程池 ({self.MAX_CONCURRENT_WORKERS} 线程)'}")
+        _log_print(f"\n{'='*60}")
+        _log_print(f"✅ Facebook Ads 数据同步完成！")
+        _log_print(f"📊 共同步 {count} 条广告记录（包含每天的数据）")
+        _log_print(f"⏱️  总耗时: {elapsed_time:.2f} 秒")
+        _log_print(f"⚡ 平均速度: {count/elapsed_time:.2f} 条/秒")
+        _log_print(f"🔧 优化模式: {'Batch API' if self.USE_BATCH_API else f'高并发线程池 ({self.MAX_CONCURRENT_WORKERS} 线程)'}")
         
         # 性能提示
         if elapsed_time > 0 and count > 0:
             date_count = len(self._generate_date_list(start_date, end_date))
             unique_ads_count = count // date_count if date_count > 0 else count
-            print(f"📈 性能指标: 约 {unique_ads_count} 个唯一广告 × {date_count} 天")
+            _log_print(f"📈 性能指标: 约 {unique_ads_count} 个唯一广告 × {date_count} 天")
             
         # 性能优化建议
         if not self.ENABLE_PREVIEW:
-            print(f"💡 提示: 已禁用预览，如需预览请设置 ENABLE_PREVIEW = True")
+            _log_print(f"💡 提示: 已禁用预览，如需预览请设置 ENABLE_PREVIEW = True")
         
-        print(f"{'='*60}\n")
+        _log_print(f"{'='*60}\n")
         
         # 显示性能统计
         self.perf_stats.print_summary()
@@ -1434,17 +1452,17 @@ class FacebookAdsDataSyncService(BaseSyncService):
         total_cache_requests = self.cache_hits + self.cache_misses
         if total_cache_requests > 0:
             cache_hit_rate = (self.cache_hits / total_cache_requests) * 100
-            print(f"\n{'='*60}")
-            print(f"📊 缓存统计:")
-            print(f"{'='*60}")
-            print(f"  缓存命中: {self.cache_hits} 次")
-            print(f"  缓存未命中: {self.cache_misses} 次")
-            print(f"  缓存命中率: {cache_hit_rate:.1f}%")
+            _log_print(f"\n{'='*60}")
+            _log_print(f"📊 缓存统计:")
+            _log_print(f"{'='*60}")
+            _log_print(f"  缓存命中: {self.cache_hits} 次")
+            _log_print(f"  缓存未命中: {self.cache_misses} 次")
+            _log_print(f"  缓存命中率: {cache_hit_rate:.1f}%")
             cache_stats = self.cache.get_stats()
-            print(f"  缓存总条目: {cache_stats['total']} (有效: {cache_stats['valid']}, 过期: {cache_stats['expired']})")
+            _log_print(f"  缓存总条目: {cache_stats['total']} (有效: {cache_stats['valid']}, 过期: {cache_stats['expired']})")
             if cache_hit_rate > 0:
                 saved_requests = self.cache_hits
-                print(f"  💡 节省了约 {saved_requests} 次API请求！")
-            print(f"{'='*60}\n")
+                _log_print(f"  💡 节省了约 {saved_requests} 次API请求！")
+            _log_print(f"{'='*60}\n")
         
         return self.create_sync_result(True, f"成功同步 {count} 条广告数据（耗时 {elapsed_time:.2f}秒）", count)

@@ -1,4 +1,5 @@
 import { clearAuthToken, setAuthToken } from '../services/api'
+import { joinApiUrl } from '../utils/apiUrl'
 
 const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 const AUTH_USER_STORAGE_KEY = 'auth_user'
@@ -6,9 +7,75 @@ const DEFAULT_AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_DINGTALK_AUTH_TIMEOU
 
 const isBrowser = () => typeof window !== 'undefined'
 
-const withApiBase = (path) => {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-  return `${apiBase}${path}`
+const withApiBase = (path) => joinApiUrl(import.meta.env.VITE_API_BASE_URL, path)
+
+const parseApiErrorMessage = (payload) => {
+  if (!payload || typeof payload !== 'object') return ''
+  if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim()
+  if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail.trim()
+  if (payload.detail && typeof payload.detail === 'object') {
+    if (typeof payload.detail.message === 'string' && payload.detail.message.trim()) return payload.detail.message.trim()
+    if (typeof payload.detail.errmsg === 'string' && payload.detail.errmsg.trim()) return payload.detail.errmsg.trim()
+  }
+  if (typeof payload.errmsg === 'string' && payload.errmsg.trim()) return payload.errmsg.trim()
+  return ''
+}
+
+const stringifyError = (error) => {
+  if (!error) return ''
+  if (typeof error === 'string') return error
+  if (error instanceof Error) return error.message
+  try {
+    return JSON.stringify(error)
+  } catch (_) {
+    return String(error)
+  }
+}
+
+const buildAuthError = ({ stage, message, status, requestId, detail, cause }) => {
+  const error = new Error(message || '钉钉鉴权失败')
+  error.name = 'DingTalkAuthError'
+  error.stage = stage || 'unknown'
+  if (typeof status === 'number') {
+    error.status = status
+  }
+  if (requestId) {
+    error.requestId = requestId
+  }
+  if (detail) {
+    error.detail = detail
+  }
+  if (cause) {
+    error.cause = cause
+  }
+  return error
+}
+
+const getRequestIdFromResponse = (response) =>
+  response?.headers?.get?.('X-Request-ID') || response?.headers?.get?.('x-request-id') || ''
+
+const readResponsePayload = async (response) => {
+  try {
+    return await response.json()
+  } catch (_) {
+    return null
+  }
+}
+
+const throwStageHttpError = async (stage, response, defaultMessage) => {
+  const payload = await readResponsePayload(response)
+  const detail = parseApiErrorMessage(payload)
+  const requestId = getRequestIdFromResponse(response)
+  const message = detail
+    ? `${defaultMessage}: ${detail}`
+    : `${defaultMessage}: HTTP ${response.status}`
+  throw buildAuthError({
+    stage,
+    message,
+    status: response.status,
+    requestId,
+    detail
+  })
 }
 
 const withTimeout = async (promise, timeoutMs, stage) => {
@@ -87,7 +154,10 @@ const parseApiData = (payload) => {
 
 export const initDingTalkAuth = async () => {
   if (!isBrowser() || !window.dd) {
-    throw new Error('当前环境不支持钉钉鉴权')
+    throw buildAuthError({
+      stage: 'environment',
+      message: '当前环境不支持钉钉鉴权，请在钉钉客户端内打开'
+    })
   }
 
   const timeoutMs =
@@ -95,47 +165,100 @@ export const initDingTalkAuth = async () => {
       ? DEFAULT_AUTH_TIMEOUT_MS
       : 8000
 
-  const signResponse = await withTimeout(
-    fetch(withApiBase('/api/auth/dingtalk/jsapi-sign'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: window.location.href.split('#')[0] })
-    }),
-    timeoutMs,
-    'dingtalk jsapi-sign'
-  )
+  let signResponse
+  try {
+    signResponse = await withTimeout(
+      fetch(withApiBase('/auth/dingtalk/jsapi-sign'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: window.location.href.split('#')[0] })
+      }),
+      timeoutMs,
+      'dingtalk jsapi-sign'
+    )
+  } catch (error) {
+    throw buildAuthError({
+      stage: 'jsapi-sign',
+      message: `签名接口请求失败: ${stringifyError(error) || 'unknown error'}`,
+      cause: error
+    })
+  }
   if (!signResponse.ok) {
-    throw new Error(`JSAPI sign failed: HTTP ${signResponse.status}`)
+    await throwStageHttpError('jsapi-sign', signResponse, '签名接口调用失败')
   }
-  const signPayload = parseApiData(await signResponse.json())
+  const signRawPayload = await readResponsePayload(signResponse)
+  const signPayload = parseApiData(signRawPayload)
   if (!signPayload?.corpId) {
-    throw new Error('Missing corpId in sign response')
+    throw buildAuthError({
+      stage: 'jsapi-sign',
+      message: '签名接口返回缺少 corpId',
+      requestId: getRequestIdFromResponse(signResponse),
+      detail: parseApiErrorMessage(signRawPayload)
+    })
   }
 
-  await withTimeout(ddConfigReady(signPayload), timeoutMs, 'dingtalk config')
+  try {
+    await withTimeout(ddConfigReady(signPayload), timeoutMs, 'dingtalk config')
+  } catch (error) {
+    throw buildAuthError({
+      stage: 'config',
+      message: `钉钉 JSAPI 配置失败: ${stringifyError(error) || 'unknown error'}`,
+      cause: error
+    })
+  }
 
-  const codeResult = await withTimeout(getAuthCode(signPayload.corpId), timeoutMs, 'dingtalk auth-code')
+  let codeResult
+  try {
+    codeResult = await withTimeout(getAuthCode(signPayload.corpId), timeoutMs, 'dingtalk auth-code')
+  } catch (error) {
+    throw buildAuthError({
+      stage: 'auth-code',
+      message: `获取钉钉授权码失败: ${stringifyError(error) || 'unknown error'}`,
+      cause: error
+    })
+  }
   const authCode = codeResult?.code || codeResult?.authCode
   if (!authCode) {
-    throw new Error('Missing auth code')
+    throw buildAuthError({
+      stage: 'auth-code',
+      message: '授权码为空，无法继续登录'
+    })
   }
 
-  const loginResponse = await withTimeout(
-    fetch(withApiBase('/api/auth/dingtalk/login'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ auth_code: authCode })
-    }),
-    timeoutMs,
-    'dingtalk login'
-  )
+  let loginResponse
+  try {
+    loginResponse = await withTimeout(
+      fetch(withApiBase('/auth/dingtalk/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auth_code: authCode })
+      }),
+      timeoutMs,
+      'dingtalk login'
+    )
+  } catch (error) {
+    throw buildAuthError({
+      stage: 'login',
+      message: `登录接口请求失败: ${stringifyError(error) || 'unknown error'}`,
+      cause: error
+    })
+  }
   if (!loginResponse.ok) {
-    throw new Error(`Login failed: HTTP ${loginResponse.status}`)
+    await throwStageHttpError('login', loginResponse, '登录接口调用失败')
   }
 
-  const loginPayload = parseApiData(await loginResponse.json())
+  const loginRawPayload = await readResponsePayload(loginResponse)
+  const loginPayload = parseApiData(loginRawPayload)
   const token = loginPayload?.token || ''
   const user = loginPayload?.user || null
+  if (!token) {
+    throw buildAuthError({
+      stage: 'login',
+      message: '登录接口未返回 token',
+      requestId: getRequestIdFromResponse(loginResponse),
+      detail: parseApiErrorMessage(loginRawPayload)
+    })
+  }
   saveSession(token, user)
 
   return loginPayload

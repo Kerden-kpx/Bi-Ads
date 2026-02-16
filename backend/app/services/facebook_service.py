@@ -1,6 +1,7 @@
 """
 Facebook Ads Dashboard业务逻辑服务（优化版，支持自动重试和缓存）
 """
+import logging
 from typing import Dict, Any, List
 import os
 from sqlalchemy import text
@@ -18,6 +19,22 @@ from app.core.config import settings
 from app.core.cache import cached
 
 FACEBOOK_API_EXECUTOR = ThreadPoolExecutor(max_workers=max(1, settings.FACEBOOK_API_MAX_WORKERS))
+logger = logging.getLogger("app.services.facebook_service")
+
+
+def _log_print(*args, **kwargs) -> None:
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args).strip()
+    if not message:
+        return
+    if "❌" in message:
+        logger.error(message)
+    elif "⚠️" in message or "警告" in message:
+        logger.warning(message)
+    elif "⏳" in message or "进度" in message:
+        logger.debug(message)
+    else:
+        logger.info(message)
 
 
 class FacebookDashboardService(BaseDashboardService):
@@ -36,9 +53,9 @@ class FacebookDashboardService(BaseDashboardService):
             os.environ['HTTPS_PROXY'] = proxy_url
             os.environ['http_proxy'] = proxy_url
             os.environ['https_proxy'] = proxy_url
-            print(f"🔧 Facebook 代理已设置: {proxy_url}")
+            _log_print(f"🔧 Facebook 代理已设置: {proxy_url}")
         else:
-            print("ℹ️ 未设置 Facebook 代理，使用直连")
+            _log_print("ℹ️ 未设置 Facebook 代理，使用直连")
     
     @cached(prefix="facebook:impressions:db", ttl=settings.CACHE_TTL_MEDIUM)
     async def get_impressions_data(
@@ -50,13 +67,8 @@ class FacebookDashboardService(BaseDashboardService):
         account_id: str = None
     ) -> Dict[str, Any]:
         """获取印象和触达数据（从数据库）- 已启用缓存"""
-        
-        # 构建WHERE条件
-        where_conditions = "createtime BETWEEN :start_date AND :end_date"
-        if account_id:
-            where_conditions += " AND account_id = :account_id"
-        
-        query = text(f"""
+
+        query = text("""
             SELECT
                 createtime,
                 SUM(impression) AS impressions,
@@ -66,15 +78,14 @@ class FacebookDashboardService(BaseDashboardService):
                 AVG(CASE WHEN impression > 0 THEN (clicks / impression * 100) ELSE 0 END) AS ctr,
                 AVG(CASE WHEN impression > 0 THEN (spend / impression * 1000) ELSE 0 END) AS cpm
             FROM fact_bi_ads_facebook_campaign
-            WHERE {where_conditions}
+            WHERE createtime BETWEEN :start_date AND :end_date
+              AND (:account_id IS NULL OR account_id = :account_id)
             GROUP BY createtime
             ORDER BY createtime
         """)
         
         # 执行查询
-        params = {"start_date": start_date, "end_date": end_date}
-        if account_id:
-            params["account_id"] = account_id
+        params = {"start_date": start_date, "end_date": end_date, "account_id": account_id}
         current_rows = await self.execute_query(query, params)
         current_data = [self._parse_impression_row(row) for row in current_rows]
         
@@ -99,9 +110,7 @@ class FacebookDashboardService(BaseDashboardService):
         
         # 处理对比数据
         if compare_start_date and compare_end_date:
-            compare_params = {"start_date": compare_start_date, "end_date": compare_end_date}
-            if account_id:
-                compare_params["account_id"] = account_id
+            compare_params = {"start_date": compare_start_date, "end_date": compare_end_date, "account_id": account_id}
             compare_rows = await self.execute_query(query, compare_params)
             compare_data = [self._parse_impression_row(row) for row in compare_rows]
             
@@ -134,13 +143,8 @@ class FacebookDashboardService(BaseDashboardService):
         account_id: str = None
     ) -> Dict[str, Any]:
         """获取购买和花费数据（从数据库）- 已启用缓存"""
-        
-        # 构建WHERE条件
-        where_conditions = "createtime BETWEEN :start_date AND :end_date"
-        if account_id:
-            where_conditions += " AND account_id = :account_id"
-        
-        query = text(f"""
+
+        query = text("""
             SELECT
                 createtime,
                 SUM(purchases_roas * spend) AS purchases_value,
@@ -150,15 +154,14 @@ class FacebookDashboardService(BaseDashboardService):
                 SUM(adds_payment_info) AS adds_payment_info,
                 IFNULL(SUM(purchases_roas * spend) / NULLIF(SUM(spend), 0), 0) AS roas
             FROM fact_bi_ads_facebook_campaign
-            WHERE {where_conditions}
+            WHERE createtime BETWEEN :start_date AND :end_date
+              AND (:account_id IS NULL OR account_id = :account_id)
             GROUP BY createtime
             ORDER BY createtime
         """)
         
         # 执行查询
-        params = {"start_date": start_date, "end_date": end_date}
-        if account_id:
-            params["account_id"] = account_id
+        params = {"start_date": start_date, "end_date": end_date, "account_id": account_id}
         current_rows = await self.execute_query(query, params)
         current_data = [self._parse_purchase_row(row) for row in current_rows]
         
@@ -188,9 +191,7 @@ class FacebookDashboardService(BaseDashboardService):
         
         # 处理对比数据
         if compare_start_date and compare_end_date:
-            compare_params = {"start_date": compare_start_date, "end_date": compare_end_date}
-            if account_id:
-                compare_params["account_id"] = account_id
+            compare_params = {"start_date": compare_start_date, "end_date": compare_end_date, "account_id": account_id}
             compare_rows = await self.execute_query(query, compare_params)
             compare_data = [self._parse_purchase_row(row) for row in compare_rows]
             
@@ -239,15 +240,8 @@ class FacebookDashboardService(BaseDashboardService):
         account_id: str = None
     ) -> List[Dict[str, Any]]:
         """获取性能对比数据（用于面积图）- 已启用缓存"""
-        
-        # 构建WHERE条件
-        where_cond1 = "createtime BETWEEN :start_time1 AND :end_time1"
-        where_cond2 = "createtime BETWEEN :start_time2 AND :end_time2"
-        if account_id:
-            where_cond1 += " AND account_id = :account_id"
-            where_cond2 += " AND account_id = :account_id"
-        
-        query = text(f"""
+
+        query = text("""
             WITH date_current AS (
                 SELECT
                     createtime,
@@ -262,7 +256,8 @@ class FacebookDashboardService(BaseDashboardService):
                     SUM(adds_to_cart) AS adds_to_cart,
                     SUM(adds_payment_info) AS adds_payment_info
                 FROM fact_bi_ads_facebook_campaign
-                WHERE {where_cond1}
+                WHERE createtime BETWEEN :start_time1 AND :end_time1
+                  AND (:account_id IS NULL OR account_id = :account_id)
                 GROUP BY createtime
             ),
             data_compare AS (
@@ -279,7 +274,8 @@ class FacebookDashboardService(BaseDashboardService):
                     SUM(adds_to_cart) AS compare_adds_to_cart,
                     SUM(adds_payment_info) AS compare_adds_payment_info
                 FROM fact_bi_ads_facebook_campaign
-                WHERE {where_cond2}
+                WHERE createtime BETWEEN :start_time2 AND :end_time2
+                  AND (:account_id IS NULL OR account_id = :account_id)
                 GROUP BY createtime
             )
             SELECT
@@ -310,10 +306,9 @@ class FacebookDashboardService(BaseDashboardService):
             "start_time1": start_time1,
             "end_time1": end_time1,
             "start_time2": start_time2,
-            "end_time2": end_time2
+            "end_time2": end_time2,
+            "account_id": account_id,
         }
-        if account_id:
-            params["account_id"] = account_id
         
         rows = await self.execute_query(query, params)
         
@@ -401,13 +396,8 @@ class FacebookDashboardService(BaseDashboardService):
         params = {
             "variable_time": variable_date,
             "product_pattern": build_mysql_regex_union(product_list),
+            "account_id": account_id,
         }
-
-        # 构建WHERE条件
-        where_condition = "campaign_name REGEXP :product_pattern"
-        if account_id:
-            where_condition += " AND account_id = :account_id"
-            params["account_id"] = account_id
 
         # 动态构建CASE WHEN语句（使用参数绑定，避免字符串拼接注入）
         case_statements = []
@@ -448,7 +438,8 @@ class FacebookDashboardService(BaseDashboardService):
                 END AS campaign_name,
                 purchases, spend, purchases_roas, createtime
               FROM fact_bi_ads_facebook_campaign, date_range
-              WHERE {where_condition}
+              WHERE campaign_name REGEXP :product_pattern
+                AND (:account_id IS NULL OR account_id = :account_id)
             ),
             current_week_data AS (
               SELECT
@@ -510,15 +501,8 @@ class FacebookDashboardService(BaseDashboardService):
         account_id: str = None
     ) -> List[Dict[str, Any]]:
         """获取Ad Sets Performance Overview数据 - 已启用缓存"""
-        
-        # 构建WHERE条件
-        where_cond1 = "createtime BETWEEN :start_time1 AND :end_time1"
-        where_cond2 = "createtime BETWEEN :start_time2 AND :end_time2"
-        if account_id:
-            where_cond1 += " AND account_id = :account_id"
-            where_cond2 += " AND account_id = :account_id"
-        
-        query = text(f"""
+
+        query = text("""
             WITH date_current AS (
                 SELECT
                     adset_id, adset_name,
@@ -530,7 +514,8 @@ class FacebookDashboardService(BaseDashboardService):
                     IFNULL(SUM(purchases_roas * spend) / NULLIF(SUM(spend), 0), 0) AS purchase_roas,
                     SUM(unique_link_clicks) AS unique_link_clicks
                 FROM fact_bi_ads_facebook_campaign
-                WHERE {where_cond1}
+                WHERE createtime BETWEEN :start_time1 AND :end_time1
+                  AND (:account_id IS NULL OR account_id = :account_id)
                 GROUP BY adset_id, adset_name
             ),
             date_compare AS (
@@ -543,7 +528,8 @@ class FacebookDashboardService(BaseDashboardService):
                     IFNULL(SUM(purchases_roas * spend) / NULLIF(SUM(spend), 0), 0) AS purchase_roas,
                     SUM(unique_link_clicks) AS unique_link_clicks
                 FROM fact_bi_ads_facebook_campaign
-                WHERE {where_cond2}
+                WHERE createtime BETWEEN :start_time2 AND :end_time2
+                  AND (:account_id IS NULL OR account_id = :account_id)
                 GROUP BY adset_id
             )
             SELECT
@@ -564,10 +550,9 @@ class FacebookDashboardService(BaseDashboardService):
             "start_time1": start_time1,
             "end_time1": end_time1,
             "start_time2": start_time2,
-            "end_time2": end_time2
+            "end_time2": end_time2,
+            "account_id": account_id,
         }
-        if account_id:
-            params["account_id"] = account_id
         
         rows = await self.execute_query(query, params)
         
@@ -583,15 +568,8 @@ class FacebookDashboardService(BaseDashboardService):
         account_id: str = None
     ) -> List[Dict[str, Any]]:
         """获取Ads Detail Performance Overview数据 - 已启用缓存"""
-        
-        # 构建WHERE条件
-        where_cond1 = "createtime BETWEEN :start_time1 AND :end_time1"
-        where_cond2 = "createtime BETWEEN :start_time2 AND :end_time2"
-        if account_id:
-            where_cond1 += " AND account_id = :account_id"
-            where_cond2 += " AND account_id = :account_id"
-        
-        query = text(f"""
+
+        query = text("""
             WITH date_current AS (
                 SELECT
                     ad_id, ad_name,
@@ -606,7 +584,8 @@ class FacebookDashboardService(BaseDashboardService):
                     MAX(image_url) AS image_url,
                     MAX(preview_url) AS preview_url
                 FROM fact_bi_ads_facebook_campaign
-                WHERE {where_cond1}
+                WHERE createtime BETWEEN :start_time1 AND :end_time1
+                  AND (:account_id IS NULL OR account_id = :account_id)
                 GROUP BY ad_id, ad_name
             ),
             date_compare AS (
@@ -621,7 +600,8 @@ class FacebookDashboardService(BaseDashboardService):
                     SUM(adds_payment_info) AS adds_payment_info,
                     SUM(adds_to_cart) AS adds_to_cart
                 FROM fact_bi_ads_facebook_campaign
-                WHERE {where_cond2}
+                WHERE createtime BETWEEN :start_time2 AND :end_time2
+                  AND (:account_id IS NULL OR account_id = :account_id)
                 GROUP BY ad_id
             )
             SELECT
@@ -646,10 +626,9 @@ class FacebookDashboardService(BaseDashboardService):
             "start_time1": start_time1,
             "end_time1": end_time1,
             "start_time2": start_time2,
-            "end_time2": end_time2
+            "end_time2": end_time2,
+            "account_id": account_id,
         }
-        if account_id:
-            params["account_id"] = account_id
         
         rows = await self.execute_query(query, params)
         

@@ -2,9 +2,23 @@
 Gemini AI 分析服务
 """
 import json
+import logging
 from typing import Dict, Any, List, Optional
 from google import genai
 from app.core.config import settings
+
+logger = logging.getLogger("app.services.gemini_ai_service")
+
+
+def _log_print(*args, **kwargs) -> None:
+    sep = kwargs.get("sep", " ")
+    message = sep.join(str(arg) for arg in args).strip()
+    if not message:
+        return
+    if "✗" in message or "❌" in message:
+        logger.warning(message)
+    else:
+        logger.info(message)
 
 
 class GeminiAIService:
@@ -84,7 +98,7 @@ class GeminiAIService:
             current_model = self.model_names[self.current_model_index]
             
             try:
-                print(f"[Gemini AI] 尝试使用模型: {current_model} (第 {attempt_index + 1}/{len(self.model_names)} 次)")
+                _log_print(f"[Gemini AI] 尝试使用模型: {current_model} (第 {attempt_index + 1}/{len(self.model_names)} 次)")
                 
                 response = self.client.models.generate_content(
                     model=current_model,
@@ -96,7 +110,7 @@ class GeminiAIService:
                 analysis_result["generatedAt"] = self._get_current_timestamp()
                 analysis_result["model"] = current_model
                 
-                print(f"[Gemini AI] ✓ 成功使用模型: {current_model}")
+                _log_print(f"[Gemini AI] ✓ 成功使用模型: {current_model}")
                 return analysis_result
                 
             except Exception as error:
@@ -105,7 +119,7 @@ class GeminiAIService:
                 
                 # 检查是否是配额超限错误
                 if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
-                    print(f"[Gemini AI] ✗ 模型 {current_model} 配额已用完，尝试切换到下一个模型...")
+                    _log_print(f"[Gemini AI] ✗ 模型 {current_model} 配额已用完，尝试切换到下一个模型...")
                     
                     # 切换到下一个模型
                     self.current_model_index = (self.current_model_index + 1) % len(self.model_names)
@@ -554,8 +568,8 @@ class GeminiAIService:
             return result
             
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"JSON解析失败: {str(e)}")
-            print(f"原始响应（前500字符）: {response_text[:500]}")
+            _log_print(f"JSON解析失败: {str(e)}")
+            _log_print(f"原始响应（前500字符）: {response_text[:500]}")
             
             # 尝试提取 JSON
             fallback = self._extract_fallback_json(response_text)
