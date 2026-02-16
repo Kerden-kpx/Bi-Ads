@@ -1,0 +1,19 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_API_TIMEOUT: ${VITE_API_TIMEOUT:-30000}
+        VITE_AI_TIMEOUT: ${VITE_AI_TIMEOUT:-120000}
+        VITE_SYNC_TIMEOUT: ${VITE_SYNC_TIMEOUT:-300000}
+        VITE_THIRD_PARTY_TIMEOUT: ${VITE_THIRD_PARTY_TIMEOUT:-90000}
+        VITE_GOOGLE_CUSTOMER_ID: ${VITE_GOOGLE_CUSTOMER_ID:-}
+        VITE_GOOGLE_PROXY_URL: ${VITE_GOOGLE_PROXY_URL:-}
+    container_name: bi-ads-frontend
+    ports:
+      - "5173:5173"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

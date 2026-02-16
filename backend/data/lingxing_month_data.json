@@ -1,0 +1,114 @@
+[
+  {
+    "year": 2025,
+    "month": 1,
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-31",
+    "conversion": 2720,
+    "conversion_value": 83820.62
+  },
+  {
+    "year": 2025,
+    "month": 2,
+    "start_date": "2025-02-01",
+    "end_date": "2025-02-28",
+    "conversion": 2665,
+    "conversion_value": 83233.88
+  },
+  {
+    "year": 2025,
+    "month": 3,
+    "start_date": "2025-03-01",
+    "end_date": "2025-03-31",
+    "conversion": 4606,
+    "conversion_value": 143400.0
+  },
+  {
+    "year": 2025,
+    "month": 4,
+    "start_date": "2025-04-01",
+    "end_date": "2025-04-30",
+    "conversion": 5297,
+    "conversion_value": 158600.0
+  },
+  {
+    "year": 2025,
+    "month": 5,
+    "start_date": "2025-05-01",
+    "end_date": "2025-05-31",
+    "conversion": 4510,
+    "conversion_value": 131600.0
+  },
+  {
+    "year": 2025,
+    "month": 6,
+    "start_date": "2025-06-01",
+    "end_date": "2025-06-30",
+    "conversion": 4654,
+    "conversion_value": 141800.0
+  },
+  {
+    "year": 2025,
+    "month": 7,
+    "start_date": "2025-07-01",
+    "end_date": "2025-07-31",
+    "conversion": 6640,
+    "conversion_value": 197600.00000000003
+  },
+  {
+    "year": 2025,
+    "month": 8,
+    "start_date": "2025-08-01",
+    "end_date": "2025-08-31",
+    "conversion": 6820,
+    "conversion_value": 180900.0
+  },
+  {
+    "year": 2025,
+    "month": 9,
+    "start_date": "2025-09-01",
+    "end_date": "2025-09-30",
+    "conversion": 5630,
+    "conversion_value": 145700.0
+  },
+  {
+    "year": 2025,
+    "month": 10,
+    "start_date": "2025-10-01",
+    "end_date": "2025-10-31",
+    "conversion": 5275,
+    "conversion_value": 141600.0
+  },
+  {
+    "year": 2025,
+    "month": 11,
+    "start_date": "2025-11-01",
+    "end_date": "2025-11-30",
+    "conversion": 6558,
+    "conversion_value": 178900.0
+  },
+  {
+    "year": 2025,
+    "month": 12,
+    "start_date": "2025-12-01",
+    "end_date": "2025-12-31",
+    "conversion": 6582,
+    "conversion_value": 194400.0
+  },
+  {
+    "year": 2026,
+    "month": 1,
+    "start_date": "2026-01-01",
+    "end_date": "2026-01-31",
+    "conversion": 8333,
+    "conversion_value": 247399.99999999997
+  },
+  {
+    "year": 2026,
+    "month": 2,
+    "start_date": "2026-02-01",
+    "end_date": "2026-02-09",
+    "conversion": 2176,
+    "conversion_value": 64233.19
+  }
+]

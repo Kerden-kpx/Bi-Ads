@@ -1,0 +1,110 @@
+/**
+ * CSS变量定义
+ * 统一管理颜色、间距、字体等样式变量
+ */
+
+:root {
+  /* 主题色 */
+  --color-primary: #409eff;
+  --color-primary-light: #66b1ff;
+  --color-primary-lighter: #bbc8ff;
+  --color-primary-dark: #2f45ff;
+  --color-success: #67c23a;
+  --color-warning: #e6a23c;
+  --color-danger: #f56c6c;
+  --color-info: #909399;
+
+  /* 文字颜色 */
+  --color-text-primary: #111827;
+  --color-text-regular: #333333;
+  --color-text-secondary: #6b7280;
+  --color-text-placeholder: #9ca3af;
+  --color-text-disabled: #d1d5db;
+
+  /* 背景色 */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8f9fa;
+  --color-bg-tertiary: #f3f4f6;
+  --color-bg-hover: #f9fafb;
+
+  /* 边框色 */
+  --color-border-base: #e5e7eb;
+  --color-border-light: #f0f0f0;
+  --color-border-dark: #d1d5db;
+
+  /* 阴影 */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-base: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 6px 30px rgba(0, 0, 0, 0.15);
+
+  /* 圆角 */
+  --border-radius-sm: 4px;
+  --border-radius-base: 6px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+
+  /* 间距 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-base: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 40px;
+
+  /* 字体大小 */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 15px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 20px;
+  --font-size-3xl: 24px;
+  --font-size-4xl: 28px;
+
+  /* 字体粗细 */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* 行高 */
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.4;
+  --line-height-relaxed: 1.6;
+
+  /* 过渡 */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* Z-index层级 */
+  --z-index-base: 1;
+  --z-index-sidebar: 90;
+  --z-index-header: 100;
+  --z-index-dropdown: 1000;
+  --z-index-modal: 2000;
+  --z-index-loading: 9999;
+
+  /* 布局尺寸 */
+  --sidebar-width: 280px;
+  --header-height: 60px;
+
+  /* 图表颜色 */
+  --chart-color-1: #5676ff;
+  --chart-color-2: #bbc8ff;
+  --chart-color-3: #0a0b5c;
+  --chart-color-4: #9d9dbe;
+  --chart-color-5: #67c23a;
+  --chart-color-6: #e6a23c;
+}
+
+/* 深色模式支持（可选） */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 在这里可以定义深色模式的变量 */
+  }
+}
+
