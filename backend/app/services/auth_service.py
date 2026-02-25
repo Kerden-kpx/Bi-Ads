@@ -26,6 +26,14 @@ _USER_SELECT_SQL = text(
     LIMIT 1
     """
 )
+_USER_UPSERT_SQL = text(
+    """
+    INSERT INTO dim_bi_ads_user (dingtalk_userid, dingtalk_username)
+    VALUES (:userid, :username)
+    ON DUPLICATE KEY UPDATE
+        dingtalk_username = VALUES(dingtalk_username)
+    """
+)
 
 
 def _ensure_config(value: str, field_name: str) -> str:
@@ -139,9 +147,28 @@ def _get_userid_from_auth_code(auth_code: str) -> str:
     return str(userid)
 
 
+def _get_username_from_userid(userid: str) -> str:
+    token = _get_access_token()
+    url = f"{settings.DINGTALK_USER_DETAIL_URL}?access_token={token}"
+    resp = _http_post_json(url, {"userid": userid})
+    _ensure_ok(resp, "获取用户详情")
+    result = resp.get("result") or {}
+    name = str(result.get("name") or "").strip()
+    return name or userid
+
+
 def _fetch_user(db: Session, userid: str) -> Dict[str, Any] | None:
     row = db.execute(_USER_SELECT_SQL, {"userid": userid}).mappings().first()
     return dict(row) if row else None
+
+
+def _upsert_user(db: Session, userid: str, username: str) -> Dict[str, Any]:
+    db.execute(_USER_UPSERT_SQL, {"userid": userid, "username": username or userid})
+    db.commit()
+    user = _fetch_user(db, userid)
+    if not user:
+        raise HTTPException(status_code=500, detail="写入用户信息成功但读取失败")
+    return user
 
 
 def login_with_auth_code(db: Session, auth_code: str) -> Dict[str, Any]:
@@ -152,7 +179,8 @@ def login_with_auth_code(db: Session, auth_code: str) -> Dict[str, Any]:
     userid = _get_userid_from_auth_code(code)
     user = _fetch_user(db, userid)
     if not user:
-        raise HTTPException(status_code=403, detail="用户不存在或无权限")
+        username = _get_username_from_userid(userid)
+        user = _upsert_user(db, userid, username)
     token = create_access_token(
         userid=str(user.get("dingtalk_userid") or userid),
         username=str(user.get("dingtalk_username") or userid),

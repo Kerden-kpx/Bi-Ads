@@ -210,6 +210,13 @@ class Settings(BaseSettings):
     DINGTALK_JSAPI_TICKET_URL: str = "https://oapi.dingtalk.com/get_jsapi_ticket"
     DINGTALK_USERID_URL: str = "https://oapi.dingtalk.com/topapi/v2/user/getuserinfo"
     DINGTALK_USER_DETAIL_URL: str = "https://oapi.dingtalk.com/topapi/v2/user/get"
+    DINGTALK_ROBOT_CODE: str = ""
+    DINGTALK_NOTIFY_ENABLED: bool = True
+    DINGTALK_TECH_USER_IDS: str = "17331048354297047"
+
+    @property
+    def DINGTALK_TECH_USER_ID_LIST(self) -> List[str]:
+        return [item.strip() for item in self.DINGTALK_TECH_USER_IDS.split(",") if item.strip()]
 
     @property
     def AUTH_SECRET_EFFECTIVE(self) -> str:

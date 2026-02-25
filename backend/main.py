@@ -2,6 +2,7 @@
 Facebook Ads BI Dashboard - FastAPI Backend
 主应用入口
 """
+import asyncio
 import logging
 
 from fastapi import FastAPI, HTTPException, Request
@@ -21,6 +22,7 @@ from app.core.scheduler import (
     start_facebook_ads_daily_sync_task,
     start_google_ads_daily_sync_task,
 )
+from app.services.dingtalk_notify_service import send_error_notification
 
 # 加载环境变量
 load_dotenv()
@@ -61,6 +63,21 @@ def _auth_error_response(status_code: int, detail):
     )
 
 
+def _notify_error(request: Request, status_code: int, message: str) -> None:
+    request_id = getattr(request.state, "request_id", "-")
+    text = (
+        "[Bi-Ads 后端报错]\n"
+        f"状态码: {status_code}\n"
+        f"路径: {request.method} {request.url.path}\n"
+        f"请求ID: {request_id}\n"
+        f"详情: {message}"
+    )
+    try:
+        asyncio.create_task(asyncio.to_thread(send_error_notification, text))
+    except Exception:
+        logger.exception("schedule dingtalk notify failed")
+
+
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
     request_id = build_request_id(request.headers.get("X-Request-ID"))
@@ -90,6 +107,7 @@ async def auth_middleware(request: Request, call_next):
             request.state.current_user = authenticate_request(request)
         except HTTPException as exc:
             logger.warning("auth failed path=%s status=%s", path, exc.status_code)
+            _notify_error(request, exc.status_code, str(exc.detail))
             return _auth_error_response(exc.status_code, exc.detail)
 
     return await call_next(request)
@@ -163,6 +181,7 @@ async def root():
 async def global_exception_handler(request, exc):
     """全局异常处理"""
     logger.exception("unhandled exception path=%s", getattr(request, "url", "unknown"))
+    _notify_error(request, 500, str(exc))
     return JSONResponse(
         status_code=500,
         content={
@@ -170,6 +189,28 @@ async def global_exception_handler(request, exc):
             "message": str(exc) if settings.DEBUG else "服务器内部错误",
             "data": None
         }
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """HTTP异常统一处理：输出关键信息并返回统一结构，便于移动端排查"""
+    logger.warning(
+        "http exception path=%s status=%s detail=%s",
+        request.url.path,
+        exc.status_code,
+        exc.detail,
+    )
+    _notify_error(request, exc.status_code, str(exc.detail))
+    request_id = getattr(request.state, "request_id", "")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "code": exc.status_code,
+            "message": str(exc.detail),
+            "requestId": request_id,
+            "data": None,
+        },
     )
 
 if __name__ == "__main__":
