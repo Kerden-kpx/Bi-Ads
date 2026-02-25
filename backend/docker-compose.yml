@@ -1,14 +1,13 @@
-version: "3.9"
-
 services:
   backend:
     build:
       context: .
       args:
-        # 默认使用官方源，必要时可临时覆盖为镜像源
-        PIP_INDEX_URL: https://pypi.org/simple
-        PIP_EXTRA_INDEX_URL: https://pypi.org/simple
-        PIP_TRUSTED_HOST: pypi.org files.pythonhosted.org
+        # 默认使用国内镜像加速；可通过环境变量覆盖
+        APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-https://pypi.org/simple}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn pypi.org files.pythonhosted.org}
     container_name: bi-ads-backend
     env_file:
       - .env
@@ -19,6 +18,11 @@ services:
       - DEBUG=False
       # gunicorn worker 数，按需调整
       - WORKERS=4
+      # Common 包导入路径配置（用于钉钉告警复用）
+      - YIDA_COMMON_PARENT=/yida
+      - YIDA_COMMON_PACKAGE=Common
+    volumes:
+      - /yida/Common:/yida/Common:ro
     ports:
       - "7800:7800"
     restart: unless-stopped

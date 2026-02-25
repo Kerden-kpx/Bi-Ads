@@ -63,6 +63,33 @@ def _auth_error_response(status_code: int, detail):
     )
 
 
+def _mask_token(token: str) -> str:
+    token = (token or "").strip()
+    if not token:
+        return ""
+    if len(token) <= 12:
+        return f"{token[:2]}***{token[-2:]}"
+    return f"{token[:6]}...{token[-6:]}"
+
+
+def _build_auth_log_context(request: Request) -> dict:
+    auth_header = request.headers.get("Authorization", "")
+    auth_scheme = ""
+    token = ""
+    if auth_header:
+        parts = auth_header.split(" ", 1)
+        auth_scheme = parts[0]
+        if len(parts) > 1:
+            token = parts[1].strip()
+    return {
+        "client_ip": request.client.host if request.client else "-",
+        "auth_present": bool(auth_header),
+        "auth_scheme": auth_scheme or "-",
+        "token_len": len(token),
+        "token_preview": _mask_token(token),
+    }
+
+
 def _notify_error(request: Request, status_code: int, message: str) -> None:
     request_id = getattr(request.state, "request_id", "-")
     text = (
@@ -106,8 +133,16 @@ async def auth_middleware(request: Request, call_next):
         try:
             request.state.current_user = authenticate_request(request)
         except HTTPException as exc:
-            logger.warning("auth failed path=%s status=%s", path, exc.status_code)
-            _notify_error(request, exc.status_code, str(exc.detail))
+            logger.warning(
+                "auth failed path=%s status=%s detail=%s context=%s",
+                path,
+                exc.status_code,
+                exc.detail,
+                _build_auth_log_context(request),
+            )
+            # 401（令牌过期/无效）属于常见会话状态，不触发告警，避免噪音。
+            if exc.status_code != 401:
+                _notify_error(request, exc.status_code, str(exc.detail))
             return _auth_error_response(exc.status_code, exc.detail)
 
     return await call_next(request)

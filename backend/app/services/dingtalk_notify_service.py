@@ -13,13 +13,17 @@ from app.core.config import settings
 logger = logging.getLogger("app.services.dingtalk_notify")
 
 _COMMON_SEND_USER_TEXT = None
+_COMMON_LOAD_ATTEMPTED = False
+_COMMON_LOAD_ERROR = ""
+_MISSING_SENDER_WARNED = False
 
 
 def _load_common_sender():
     """优先复用 Common/common 包中的 dingtalk_client.send_user_text"""
-    global _COMMON_SEND_USER_TEXT
-    if _COMMON_SEND_USER_TEXT is not None:
+    global _COMMON_SEND_USER_TEXT, _COMMON_LOAD_ATTEMPTED, _COMMON_LOAD_ERROR
+    if _COMMON_LOAD_ATTEMPTED:
         return _COMMON_SEND_USER_TEXT
+    _COMMON_LOAD_ATTEMPTED = True
 
     # Common 目录的父目录应在 sys.path 中，才能 import Common/common.*
     candidate_roots = ["/yida", "/mnt/d/Yida_project"]
@@ -47,8 +51,10 @@ def _load_common_sender():
             module = importlib.import_module(f"{pkg_name}.api.dingtalk_client")
             _COMMON_SEND_USER_TEXT = getattr(module, "send_user_text", None)
             if _COMMON_SEND_USER_TEXT:
+                _COMMON_LOAD_ERROR = ""
                 return _COMMON_SEND_USER_TEXT
-        except Exception:
+        except Exception as exc:
+            _COMMON_LOAD_ERROR = str(exc)
             continue
 
     _COMMON_SEND_USER_TEXT = None
@@ -57,6 +63,7 @@ def _load_common_sender():
 
 def send_error_notification(text: str) -> None:
     """发送异常通知给技术人员（单聊）"""
+    global _MISSING_SENDER_WARNED
     if not settings.DINGTALK_NOTIFY_ENABLED:
         return
     if not settings.DINGTALK_ROBOT_CODE:
@@ -69,7 +76,13 @@ def send_error_notification(text: str) -> None:
 
     common_sender = _load_common_sender()
     if not common_sender:
-        logger.warning("skip dingtalk notify: Common/common.api.dingtalk_client.send_user_text not available")
+        if not _MISSING_SENDER_WARNED:
+            reason = f", reason={_COMMON_LOAD_ERROR}" if _COMMON_LOAD_ERROR else ""
+            logger.warning(
+                "skip dingtalk notify: Common/common.api.dingtalk_client.send_user_text not available%s",
+                reason,
+            )
+            _MISSING_SENDER_WARNED = True
         return
 
     try:

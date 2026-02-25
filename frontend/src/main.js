@@ -5,7 +5,8 @@ import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 import App from './App.vue'
-import { applyAuthToken, initDingTalkAuth } from './auth/dingtalk'
+import { applyAuthToken, clearLocalAuth, initDingTalkAuth } from './auth/dingtalk'
+import { joinApiUrl } from './utils/apiUrl'
 import './styles/variables.css'
 import './style.css'
 
@@ -47,6 +48,7 @@ router.afterEach((to) => {
 })
 
 const getStoredToken = () => window.localStorage.getItem('auth_token') || ''
+const withApiBase = (path) => joinApiUrl(import.meta.env.VITE_API_BASE_URL, path)
 
 const AUTH_STAGE_LABELS = {
   environment: '环境检查',
@@ -107,15 +109,29 @@ const mountApp = () => {
   app.mount('#app')
 }
 
+const validateStoredToken = async (token) => {
+  if (!token) return false
+  try {
+    const response = await fetch(withApiBase('/auth/me'), {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    return response.ok
+  } catch (_) {
+    return false
+  }
+}
+
 const bootstrap = async () => {
   const storedToken = getStoredToken()
   if (storedToken) {
     applyAuthToken(storedToken)
-  }
-
-  if (storedToken) {
-    mountApp()
-    return
+    const isValid = await validateStoredToken(storedToken)
+    if (isValid) {
+      mountApp()
+      return
+    }
+    clearLocalAuth()
   }
 
   showAuthLoading()

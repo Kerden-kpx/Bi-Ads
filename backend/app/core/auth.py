@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from fastapi import HTTPException, Request
-from jose import JWTError, jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 from sqlalchemy import text
 
 from app.core.config import settings
@@ -53,8 +53,10 @@ def create_access_token(userid: str, username: str) -> str:
 def _decode_access_token(token: str) -> Dict[str, Any]:
     try:
         return jwt.decode(token, _get_auth_secret(), algorithms=[settings.ALGORITHM])
+    except ExpiredSignatureError as exc:
+        raise HTTPException(status_code=401, detail="认证令牌已过期") from exc
     except JWTError as exc:
-        raise HTTPException(status_code=401, detail="无效或过期的令牌") from exc
+        raise HTTPException(status_code=401, detail="认证令牌无效或签名校验失败") from exc
 
 
 def _fetch_user(userid: str) -> Dict[str, Any] | None:
@@ -69,8 +71,10 @@ def _fetch_user(userid: str) -> Dict[str, Any] | None:
 def authenticate_request(request: Request) -> CurrentUser:
     """从请求头认证并返回当前用户"""
     auth_header = request.headers.get("Authorization", "")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="缺少 Authorization 请求头")
     if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="缺少认证令牌")
+        raise HTTPException(status_code=401, detail="Authorization 格式错误，需使用 Bearer token")
 
     token = auth_header.replace("Bearer ", "", 1).strip()
     if not token:

@@ -27,6 +27,8 @@ const apiClient = axios.create({
   }
 })
 
+let authRefreshPromise = null
+
 const getStoredAuthToken = () => {
   if (typeof window === 'undefined') return ''
   return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || ''
@@ -37,6 +39,26 @@ const purgeStoredAuth = () => {
   window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
   window.localStorage.removeItem(AUTH_USER_STORAGE_KEY)
   window.dispatchEvent(new Event('auth_user_updated'))
+}
+
+const shouldAutoRefreshOnExpired = (error) => {
+  const status = error?.response?.status
+  if (status !== 401) return false
+  const message = String(error?.response?.data?.message || '')
+  return message.includes('认证令牌已过期')
+}
+
+const isAuthEndpoint = (url = '') => String(url).includes('/auth/dingtalk/')
+
+const refreshAuthSession = async () => {
+  if (!authRefreshPromise) {
+    authRefreshPromise = import('../auth/dingtalk')
+      .then(({ initDingTalkAuth }) => initDingTalkAuth())
+      .finally(() => {
+        authRefreshPromise = null
+      })
+  }
+  return authRefreshPromise
 }
 
 const withAuthRequest = (config) => {
@@ -53,8 +75,28 @@ const withResponse = (label) => ({
   success(response) {
     return response.data
   },
-  error(error) {
-    if (error?.response?.status === 401) {
+  async error(error) {
+    const originalConfig = error?.config || {}
+    if (
+      shouldAutoRefreshOnExpired(error) &&
+      !originalConfig.__authRetried &&
+      !isAuthEndpoint(originalConfig.url)
+    ) {
+      originalConfig.__authRetried = true
+      originalConfig.headers = originalConfig.headers || {}
+      delete originalConfig.headers.Authorization
+      try {
+        await refreshAuthSession()
+        return apiClient.request(originalConfig)
+      } catch (_) {
+        clearAuthToken()
+        purgeStoredAuth()
+        // 刷新失败时重载页面，触发 bootstrap() 重新走钉钉授权流程
+        if (typeof window !== 'undefined') {
+          window.location.reload()
+        }
+      }
+    } else if (error?.response?.status === 401) {
       clearAuthToken()
       purgeStoredAuth()
     }
